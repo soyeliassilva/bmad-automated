@@ -128,6 +128,7 @@ func (e *DefaultExecutor) Execute(ctx context.Context, prompt string) (<-chan Ev
 		"--dangerously-skip-permissions",
 		"-p", prompt,
 		"--output-format", e.config.OutputFormat,
+		"--verbose",
 	)
 
 	stdout, err := cmd.StdoutPipe()
@@ -176,6 +177,7 @@ func (e *DefaultExecutor) ExecuteWithResult(ctx context.Context, prompt string, 
 		"--dangerously-skip-permissions",
 		"-p", prompt,
 		"--output-format", e.config.OutputFormat,
+		"--verbose",
 	)
 
 	stdout, err := cmd.StdoutPipe()
