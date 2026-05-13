@@ -18,6 +18,18 @@
 //  4. [DefaultConfig] defaults
 package config
 
+// deferredQuestionsInstruction is appended to workflow prompts so Claude logs
+// uncertainties instead of blocking on questions during automated runs.
+const deferredQuestionsInstruction = ` DEFERRED QUESTIONS: When you encounter uncertainty where documentation is incomplete or ambiguous and you must assume a decision, do NOT stop. Make your best judgment and proceed, but append the question to _bmad-output/implementation-artifacts/deferred-questions.md using this exact format per question:
+
+## {{.StoryKey}} — [Brief title of the uncertainty]
+
+- **Question:** What you were uncertain about
+- **Decision made:** What you chose and why
+- **Alternatives:** Other viable options you considered
+- **Confidence:** Low / Medium / High
+- **Files affected:** List of files impacted by this decision`
+
 // Config represents the root configuration structure.
 //
 // This is the main configuration container loaded by [Loader] and used throughout
@@ -98,13 +110,13 @@ func DefaultConfig() *Config {
 	return &Config{
 		Workflows: map[string]WorkflowConfig{
 			"create-story": {
-				PromptTemplate: "/bmad-create-story - Create story: {{.StoryKey}}. Do not ask questions.",
+				PromptTemplate: "/bmad-create-story - Create story: {{.StoryKey}}. Do not ask questions." + deferredQuestionsInstruction,
 			},
 			"dev-story": {
-				PromptTemplate: "/bmad-dev-story - Work on story: {{.StoryKey}}. Complete all tasks. Run tests after each implementation. Do not ask clarifying questions - use best judgment based on existing patterns.",
+				PromptTemplate: "/bmad-dev-story - Work on story: {{.StoryKey}}. Complete all tasks. Run tests after each implementation. Do not ask clarifying questions - use best judgment based on existing patterns." + deferredQuestionsInstruction,
 			},
 			"code-review": {
-				PromptTemplate: "/bmad-code-review - Review story: {{.StoryKey}}. When presenting fix options, always choose to auto-fix all issues immediately. Do not wait for user input.",
+				PromptTemplate: "/bmad-code-review - Review story: {{.StoryKey}}. When presenting fix options, always choose to auto-fix all issues immediately. Do not wait for user input." + deferredQuestionsInstruction,
 			},
 			"git-commit": {
 				PromptTemplate: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Then push to the current branch. Do not ask questions.",

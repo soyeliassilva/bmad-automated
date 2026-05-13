@@ -16,6 +16,7 @@
 //   - run - Execute full story lifecycle from current status to done
 //   - queue - Run lifecycle for multiple stories sequentially
 //   - epic - Run all stories in an epic
+//   - resolve-questions - Interactively resolve deferred questions from automated runs
 //   - raw - Execute a raw prompt directly
 //   - create-story, dev-story, code-review, git-commit - Individual workflow commands
 package cli
@@ -153,6 +154,7 @@ func NewApp(cfg *config.Config) *App {
 //   - run: Execute full story lifecycle from current status to done
 //   - queue: Run lifecycle for multiple stories sequentially
 //   - epic: Run all stories in an epic
+//   - resolve-questions: Interactively resolve deferred questions from automated runs
 //   - raw: Execute a raw prompt directly
 //   - create-story: Create a new story from backlog status
 //   - dev-story: Develop a story (ready-for-dev or in-progress status)
@@ -178,6 +180,8 @@ story creation, development, code review, and git operations.`,
 		newQueueCommand(app),
 		newEpicCommand(app),
 		newRawCommand(app),
+		newResolveQuestionsCommand(app),
+		newResolveWorkCommand(app),
 	)
 
 	return rootCmd
