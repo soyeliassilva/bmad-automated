@@ -13,6 +13,8 @@ A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-ME
 - **Full Lifecycle Execution** - Run a story from current status to completion with a single command
 - **Epic Processing** - Process all stories in an epic in order
 - **Queue Processing** - Process multiple stories in batch
+- **Deferred Questions** - Claude logs uncertainties to a file instead of blocking, so you can review and resolve them after automation completes
+- **Deferred Work Resolution** - Interactively triage technical debt and follow-up items logged during code reviews
 - **Dry Run Mode** - Preview workflows without executing them
 - **Configurable Prompts** - Customize workflow prompts via YAML configuration
 - **Streaming Output** - Real-time feedback from Claude's execution
@@ -137,6 +139,33 @@ Preview what workflows would run without executing them:
 ```bash
 bmad-automate queue 6-5 6-6 6-7 --dry-run
 ```
+
+### Resolving Deferred Questions
+
+During automated runs, Claude logs uncertainties and assumptions to `_bmad-output/implementation-artifacts/deferred-questions.md` instead of blocking for input. After an epic completes, review and resolve those questions interactively:
+
+```bash
+bmad-automate resolve-questions <epic-id>
+```
+
+This launches an interactive Claude session that walks you through each question one at a time, asks for your answer, and applies any necessary code changes.
+
+### Resolving Deferred Work
+
+Code reviews log technical debt, edge cases, and follow-up items to `_bmad-output/implementation-artifacts/deferred-work.md`. Triage these items interactively:
+
+```bash
+# Review all deferred work
+bmad-automate resolve-work
+
+# Review only items from a specific epic
+bmad-automate resolve-work <epic-id>
+```
+
+For each item, you choose to:
+- **[R] Resolve** - Apply the fix now
+- **[D] Dismiss** - Remove it, not needed
+- **[S] Skip** - Keep it for later
 
 ### Raw Prompts
 
