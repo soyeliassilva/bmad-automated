@@ -12,6 +12,7 @@ import (
 
 func newQueueCommand(app *App) *cobra.Command {
 	var dryRun bool
+	var gitLocal bool
 
 	cmd := &cobra.Command{
 		Use:   "queue <story-key> [story-key...]",
@@ -37,6 +38,11 @@ Example:
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			// Apply git-local flag to config
+			if gitLocal {
+				app.Config.GitLocal = true
+			}
 
 			// Create lifecycle executor with app dependencies
 			executor := lifecycle.NewExecutor(app.Runner, app.StatusReader, app.StatusWriter)
@@ -67,6 +73,7 @@ Example:
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
+	cmd.Flags().BoolVar(&gitLocal, "git-local", false, "Commit locally without pushing to remote")
 
 	return cmd
 }

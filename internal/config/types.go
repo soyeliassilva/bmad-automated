@@ -48,6 +48,10 @@ type Config struct {
 
 	// Output contains terminal output formatting configuration.
 	Output OutputConfig `mapstructure:"output"`
+
+	// GitLocal when true modifies git-commit to only commit locally without pushing.
+	// Set via --git-local flag on epic, run, and queue commands.
+	GitLocal bool `mapstructure:"-"`
 }
 
 // WorkflowConfig represents a single workflow configuration.
@@ -119,7 +123,7 @@ func DefaultConfig() *Config {
 				PromptTemplate: "/bmad-code-review - Review story: {{.StoryKey}}. When presenting fix options, always choose to auto-fix all issues immediately. Do not wait for user input." + deferredQuestionsInstruction,
 			},
 			"git-commit": {
-				PromptTemplate: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Then push to the current branch. Do not ask questions.",
+				PromptTemplate: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format.{{if .GitLocal}} Do NOT push to remote. Only commit locally.{{else}} Then push to the current branch.{{end}} Do not ask questions.",
 			},
 		},
 		FullCycle: FullCycleConfig{
@@ -144,4 +148,8 @@ type PromptData struct {
 	// StoryKey is the identifier of the story being processed.
 	// Access in templates with {{.StoryKey}}.
 	StoryKey string
+
+	// GitLocal when true indicates commits should stay local (no push).
+	// Access in templates with {{.GitLocal}}.
+	GitLocal bool
 }

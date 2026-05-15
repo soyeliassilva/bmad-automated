@@ -67,7 +67,7 @@ workflows:
       - **Files affected:** List of files impacted by this decision
 
   git-commit:
-    prompt_template: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Then push to the current branch. Do not ask questions."
+    prompt_template: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format.{{if .GitLocal}} Do NOT push to remote. Only commit locally.{{else}} Then push to the current branch.{{end}} Do not ask questions."
 
 full_cycle:
   steps:

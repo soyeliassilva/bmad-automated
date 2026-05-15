@@ -12,6 +12,7 @@ import (
 
 func newEpicCommand(app *App) *cobra.Command {
 	var dryRun bool
+	var gitLocal bool
 
 	cmd := &cobra.Command{
 		Use:   "epic <epic-id>",
@@ -48,6 +49,11 @@ Example:
 				return NewExitError(1)
 			}
 
+			// Apply git-local flag to config
+			if gitLocal {
+				app.Config.GitLocal = true
+			}
+
 			// Create lifecycle executor with app dependencies
 			executor := lifecycle.NewExecutor(app.Runner, app.StatusReader, app.StatusWriter)
 
@@ -77,6 +83,7 @@ Example:
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
+	cmd.Flags().BoolVar(&gitLocal, "git-local", false, "Commit locally without pushing to remote")
 
 	return cmd
 }

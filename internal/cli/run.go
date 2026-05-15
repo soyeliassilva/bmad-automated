@@ -12,6 +12,7 @@ import (
 
 func newRunCommand(app *App) *cobra.Command {
 	var dryRun bool
+	var gitLocal bool
 
 	cmd := &cobra.Command{
 		Use:   "run <story-key>",
@@ -32,6 +33,11 @@ Use --dry-run to preview workflows without executing them.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			storyKey := args[0]
 			ctx := cmd.Context()
+
+			// Apply git-local flag to config
+			if gitLocal {
+				app.Config.GitLocal = true
+			}
 
 			// Create lifecycle executor with app dependencies
 			executor := lifecycle.NewExecutor(app.Runner, app.StatusReader, app.StatusWriter)
@@ -78,6 +84,7 @@ Use --dry-run to preview workflows without executing them.`,
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
+	cmd.Flags().BoolVar(&gitLocal, "git-local", false, "Commit locally without pushing to remote")
 
 	return cmd
 }

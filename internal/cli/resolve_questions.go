@@ -35,14 +35,22 @@ Example:
 
 			prompt := fmt.Sprintf(
 				"Read the deferred questions file at _bmad-output/implementation-artifacts/deferred-questions.md. "+
-					"Filter for questions related to epic %s (story keys starting with \"%s-\"). "+
-					"Present each question to me one at a time, showing the context, the decision that was made, "+
-					"the alternatives considered, the confidence level, and the files affected. "+
-					"For each question, ask me what the correct answer should be. "+
+					"Filter for questions related to epic %s (story keys starting with \"%s-\").\n\n"+
+					"IMPORTANT — Before presenting each question, check if it was already resolved by work done in later stories. "+
+					"Look at the files affected by the question, read the current state of the code, and check git log for changes "+
+					"made by subsequent stories (e.g., if the question is from story %s-1, check if stories %s-2, %s-3, etc. "+
+					"already modified those files or implemented the functionality in question). "+
+					"If a question has been resolved by later work, mark it as auto-resolved, briefly explain which story/commit "+
+					"resolved it and how, and remove it from deferred-questions.md without asking me.\n\n"+
+					"For questions that are NOT yet resolved, present each one to me one at a time with:\n"+
+					"1. The context, decision made, alternatives considered, confidence level, and files affected\n"+
+					"2. A plain-language explanation of how this impacts the user or system behavior\n"+
+					"3. 2-3 proposed solutions or approaches with pros/cons and your recommendation\n\n"+
+					"Then ask me what the correct answer should be. "+
 					"After I answer, apply any necessary code changes to the codebase. "+
-					"Once all questions for this epic are resolved, remove the resolved entries from deferred-questions.md. "+
+					"Once all questions for this epic are processed, remove all resolved entries from deferred-questions.md. "+
 					"If there are no questions for this epic, let me know.",
-				epicID, epicID,
+				epicID, epicID, epicID, epicID, epicID,
 			)
 
 			binaryPath := app.Config.Claude.BinaryPath

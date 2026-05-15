@@ -123,7 +123,7 @@ func (c *Config) GetPrompt(workflowName, storyKey string) (string, error) {
 		return "", fmt.Errorf("unknown workflow: %s", workflowName)
 	}
 
-	return expandTemplate(workflow.PromptTemplate, PromptData{StoryKey: storyKey})
+	return expandTemplate(workflow.PromptTemplate, PromptData{StoryKey: storyKey, GitLocal: c.GitLocal})
 }
 
 // GetFullCycleSteps returns the list of workflow steps for a full lifecycle.
