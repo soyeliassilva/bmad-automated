@@ -18,9 +18,10 @@ import (
 //
 // Use [NewRunner] to create a properly initialized Runner instance.
 type Runner struct {
-	executor claude.Executor
-	printer  output.Printer
-	config   *config.Config
+	executor          claude.Executor
+	executorOverrides map[string]claude.Executor
+	printer           output.Printer
+	config            *config.Config
 }
 
 // NewRunner creates a new workflow runner with the specified dependencies.
@@ -40,13 +41,28 @@ func NewRunner(executor claude.Executor, printer output.Printer, cfg *config.Con
 	}
 }
 
+// SetExecutorForWorkflow registers an alternative executor for a specific workflow.
+//
+// When RunSingle is called with the given workflowName, the override executor
+// is used instead of the default. This enables using different CLI tools
+// (e.g., Codex for code review) for specific workflow steps.
+func (r *Runner) SetExecutorForWorkflow(workflowName string, executor claude.Executor) {
+	if r.executorOverrides == nil {
+		r.executorOverrides = make(map[string]claude.Executor)
+	}
+	r.executorOverrides[workflowName] = executor
+}
+
 // RunSingle executes a single named workflow for a story.
 //
 // The workflowName must match a workflow defined in the configuration (e.g.,
 // "analyze", "implement", "test"). The storyKey is substituted into the
 // workflow's prompt template.
 //
-// Returns the exit code from Claude CLI (0 for success, non-zero for failure).
+// If an executor override is registered for the workflow via
+// [SetExecutorForWorkflow], that executor is used instead of the default.
+//
+// Returns the exit code from the CLI (0 for success, non-zero for failure).
 func (r *Runner) RunSingle(ctx context.Context, workflowName, storyKey string) int {
 	prompt, err := r.config.GetPrompt(workflowName, storyKey)
 	if err != nil {
@@ -55,6 +71,12 @@ func (r *Runner) RunSingle(ctx context.Context, workflowName, storyKey string) i
 	}
 
 	label := fmt.Sprintf("%s: %s", workflowName, storyKey)
+
+	// Use override executor if registered for this workflow
+	if override, ok := r.executorOverrides[workflowName]; ok {
+		return r.runWithExecutor(ctx, override, prompt, label)
+	}
+
 	return r.runClaude(ctx, prompt, label)
 }
 
@@ -124,6 +146,28 @@ func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int {
 
 	r.printer.CycleSummary(storyKey, results, time.Since(totalStart))
 	return 0
+}
+
+// runWithExecutor executes a specific executor with the given prompt and handles streaming output.
+func (r *Runner) runWithExecutor(ctx context.Context, executor claude.Executor, prompt, label string) int {
+	r.printer.CommandHeader(label, prompt, r.config.Output.TruncateLength)
+
+	startTime := time.Now()
+
+	handler := func(event claude.Event) {
+		r.handleEvent(event)
+	}
+
+	exitCode, err := executor.ExecuteWithResult(ctx, prompt, handler)
+	if err != nil {
+		fmt.Printf("Error executing: %v\n", err)
+		exitCode = 1
+	}
+
+	duration := time.Since(startTime)
+	r.printer.CommandFooter(duration, exitCode == 0, exitCode)
+
+	return exitCode
 }
 
 // runClaude executes Claude CLI with the given prompt and handles streaming output.

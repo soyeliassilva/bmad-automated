@@ -49,6 +49,9 @@ type Config struct {
 	// Output contains terminal output formatting configuration.
 	Output OutputConfig `mapstructure:"output"`
 
+	// Codex contains Codex CLI configuration for alternative executor support.
+	Codex CodexConfig `mapstructure:"codex"`
+
 	// GitLocal when true modifies git-commit to only commit locally without pushing.
 	// Set via --git-local flag on epic, run, and queue commands.
 	GitLocal bool `mapstructure:"-"`
@@ -86,6 +89,16 @@ type ClaudeConfig struct {
 	// BinaryPath is the path to the Claude CLI binary.
 	// Default: "claude" (assumes Claude is in PATH).
 	// Can be overridden with BMAD_CLAUDE_PATH environment variable.
+	BinaryPath string `mapstructure:"binary_path"`
+}
+
+// CodexConfig contains Codex CLI configuration.
+//
+// These settings control how the Codex CLI binary is invoked when used
+// as an alternative executor for specific workflows.
+type CodexConfig struct {
+	// BinaryPath is the path to the Codex CLI binary.
+	// Default: "codex" (assumes Codex is in PATH).
 	BinaryPath string `mapstructure:"binary_path"`
 }
 
@@ -132,6 +145,9 @@ func DefaultConfig() *Config {
 		Claude: ClaudeConfig{
 			OutputFormat: "stream-json",
 			BinaryPath:   "claude",
+		},
+		Codex: CodexConfig{
+			BinaryPath: "codex",
 		},
 		Output: OutputConfig{
 			TruncateLines:  20,

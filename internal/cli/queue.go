@@ -13,6 +13,7 @@ import (
 func newQueueCommand(app *App) *cobra.Command {
 	var dryRun bool
 	var gitLocal bool
+	var reviewer string
 
 	cmd := &cobra.Command{
 		Use:   "queue <story-key> [story-key...]",
@@ -42,6 +43,12 @@ Example:
 			// Apply git-local flag to config
 			if gitLocal {
 				app.Config.GitLocal = true
+			}
+
+			// Apply reviewer override if set
+			if err := applyReviewerOverride(app, reviewer); err != nil {
+				cmd.SilenceUsage = true
+				return err
 			}
 
 			// Create lifecycle executor with app dependencies
@@ -74,6 +81,7 @@ Example:
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
 	cmd.Flags().BoolVar(&gitLocal, "git-local", false, "Commit locally without pushing to remote")
+	cmd.Flags().StringVar(&reviewer, "reviewer", "", "Use alternative CLI for code-review (e.g., codex)")
 
 	return cmd
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"bmad-automate/internal/claude"
+	"bmad-automate/internal/codex"
 	"bmad-automate/internal/config"
 	"bmad-automate/internal/output"
 	"bmad-automate/internal/status"
@@ -145,6 +146,33 @@ func NewApp(cfg *config.Config) *App {
 		Runner:       runner,
 		StatusReader: statusReader,
 		StatusWriter: statusWriter,
+	}
+}
+
+// applyReviewerOverride configures an alternative executor for the code-review workflow.
+//
+// When reviewer is "codex", a Codex executor is created and registered as the
+// executor override for the "code-review" workflow. The Codex executor rewrites
+// /bmad- prefixes to $bmad- in prompts automatically.
+//
+// Returns an error if the reviewer value is not recognized.
+func applyReviewerOverride(app *App, reviewer string) error {
+	switch reviewer {
+	case "codex":
+		codexExec := codex.NewExecutor(codex.ExecutorConfig{
+			BinaryPath: app.Config.Codex.BinaryPath,
+			StderrHandler: func(line string) {
+				os.Stderr.WriteString("[codex-stderr] " + line + "\n")
+			},
+		})
+		if runner, ok := app.Runner.(*workflow.Runner); ok {
+			runner.SetExecutorForWorkflow("code-review", codexExec)
+		}
+		return nil
+	case "":
+		return nil
+	default:
+		return fmt.Errorf("unknown reviewer: %s (supported: codex)", reviewer)
 	}
 }
 

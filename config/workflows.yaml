@@ -80,6 +80,9 @@ claude:
   output_format: stream-json
   binary_path: claude
 
+codex:
+  binary_path: codex
+
 output:
   truncate_lines: 20
   truncate_length: 60
