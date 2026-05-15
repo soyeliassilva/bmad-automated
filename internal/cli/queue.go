@@ -35,8 +35,9 @@ Status is updated in sprint-status.yaml after each successful workflow.
 
 Use --dry-run to preview workflows without executing them.
 
-Example:
-  bmad-automate queue 6-5 6-6 6-7 6-8`,
+Examples:
+  bmad-automate queue 6-5 6-6 6-7 6-8
+  bmad-automate queue 6-5 6-6 --git-local --auto-retry`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

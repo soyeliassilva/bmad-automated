@@ -204,7 +204,19 @@ func NewRootCommand(app *App) *cobra.Command {
 		Long: `BMAD Automation CLI - Automate development workflows with Claude.
 
 This tool orchestrates Claude to run development workflows including
-story creation, development, code review, and git operations.`,
+story creation, development, code review, and git operations.
+
+Flags available on epic, run, and queue commands:
+  --git-local      Commit locally without pushing to remote
+  --reviewer       Use an alternative CLI for code-review (e.g., codex)
+  --auto-retry     Wait and resume automatically when rate limited
+  --dry-run        Preview workflows without executing them
+
+Examples:
+  bmad-automate epic 1
+  bmad-automate epic 1 --git-local --reviewer codex --auto-retry
+  bmad-automate run 7-1-define-schema --auto-retry
+  bmad-automate queue 6-5 6-6 6-7 --git-local`,
 	}
 
 	// Add subcommands

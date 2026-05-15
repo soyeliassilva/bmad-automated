@@ -30,7 +30,9 @@ The command executes all remaining workflows based on the story's current status
 
 Status is updated in sprint-status.yaml after each successful workflow.
 
-Use --dry-run to preview workflows without executing them.`,
+Examples:
+  bmad-automate run 7-1-define-schema
+  bmad-automate run 7-1-define-schema --git-local --auto-retry`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			storyKey := args[0]
