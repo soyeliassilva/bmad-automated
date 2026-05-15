@@ -12,6 +12,8 @@
 // real processes.
 package claude
 
+import "time"
+
 // StreamEvent represents a raw JSON event from Claude's streaming output.
 //
 // This is the low-level structure that maps directly to Claude's stream-json format.
@@ -24,6 +26,20 @@ type StreamEvent struct {
 	Subtype       string          `json:"subtype,omitempty"`
 	Message       *MessageContent `json:"message,omitempty"`
 	ToolUseResult *ToolResult     `json:"tool_use_result,omitempty"`
+	RateLimitInfo *RateLimitInfo  `json:"rate_limit_info,omitempty"`
+}
+
+// RateLimitInfo contains rate limit status from a rate_limit_event.
+//
+// This appears in Claude's stream-json output on every run. When the user
+// has hit their quota, Status will be non-"allowed" and ResetsAt contains
+// the Unix timestamp when the quota resets.
+type RateLimitInfo struct {
+	// Status is "allowed" when under quota, or another value when rate limited.
+	Status string `json:"status"`
+
+	// ResetsAt is the Unix timestamp when the rate limit resets.
+	ResetsAt int64 `json:"resetsAt"`
 }
 
 // MessageContent represents the content of a message in Claude's streaming output.
@@ -103,6 +119,10 @@ const (
 	// EventTypeResult indicates the session has completed.
 	// Check [Event.SessionComplete] which will be true for result events.
 	EventTypeResult EventType = "result"
+
+	// EventTypeRateLimit indicates a rate limit status event.
+	// Check [Event.IsRateLimited] to determine if the user has hit their quota.
+	EventTypeRateLimit EventType = "rate_limit_event"
 )
 
 // SubtypeInit is the subtype value for system initialization events.
@@ -165,6 +185,14 @@ type Event struct {
 	// SessionComplete is true for result events, indicating the
 	// Claude session has finished.
 	SessionComplete bool
+
+	// RateLimitStatus is the rate limit status (e.g., "allowed").
+	// Populated when Type is [EventTypeRateLimit].
+	RateLimitStatus string
+
+	// RateLimitResetAt is when the rate limit resets.
+	// Populated when Type is [EventTypeRateLimit] and ResetsAt > 0.
+	RateLimitResetAt time.Time
 }
 
 // NewEventFromStream creates an [Event] from a raw [StreamEvent].
@@ -209,6 +237,14 @@ func NewEventFromStream(raw *StreamEvent) Event {
 			e.ToolInterrupted = raw.ToolUseResult.Interrupted
 		}
 
+	case EventTypeRateLimit:
+		if raw.RateLimitInfo != nil {
+			e.RateLimitStatus = raw.RateLimitInfo.Status
+			if raw.RateLimitInfo.ResetsAt > 0 {
+				e.RateLimitResetAt = time.Unix(raw.RateLimitInfo.ResetsAt, 0)
+			}
+		}
+
 	case EventTypeResult:
 		e.SessionComplete = true
 	}
@@ -232,6 +268,13 @@ func (e Event) IsText() bool {
 // be populated depending on the specific tool being invoked.
 func (e Event) IsToolUse() bool {
 	return e.Type == EventTypeAssistant && e.ToolName != ""
+}
+
+// IsRateLimited returns true if this event indicates the user has hit their rate limit.
+//
+// Returns true when the event is a rate_limit_event with a status other than "allowed".
+func (e Event) IsRateLimited() bool {
+	return e.Type == EventTypeRateLimit && e.RateLimitStatus != "" && e.RateLimitStatus != "allowed"
 }
 
 // IsToolResult returns true if this event contains output from a tool execution.

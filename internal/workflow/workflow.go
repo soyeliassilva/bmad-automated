@@ -41,6 +41,12 @@ func NewRunner(executor claude.Executor, printer output.Printer, cfg *config.Con
 	}
 }
 
+// SetDefaultExecutor replaces the default executor used for all workflows
+// that don't have a specific override registered via [SetExecutorForWorkflow].
+func (r *Runner) SetDefaultExecutor(executor claude.Executor) {
+	r.executor = executor
+}
+
 // SetExecutorForWorkflow registers an alternative executor for a specific workflow.
 //
 // When RunSingle is called with the given workflowName, the override executor

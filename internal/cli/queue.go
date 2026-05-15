@@ -14,6 +14,7 @@ func newQueueCommand(app *App) *cobra.Command {
 	var dryRun bool
 	var gitLocal bool
 	var reviewer string
+	var autoRetry bool
 
 	cmd := &cobra.Command{
 		Use:   "queue <story-key> [story-key...]",
@@ -43,6 +44,11 @@ Example:
 			// Apply git-local flag to config
 			if gitLocal {
 				app.Config.GitLocal = true
+			}
+
+			// Apply auto-retry if set
+			if autoRetry {
+				applyAutoRetry(app)
 			}
 
 			// Apply reviewer override if set
@@ -82,6 +88,7 @@ Example:
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
 	cmd.Flags().BoolVar(&gitLocal, "git-local", false, "Commit locally without pushing to remote")
 	cmd.Flags().StringVar(&reviewer, "reviewer", "", "Use alternative CLI for code-review (e.g., codex)")
+	cmd.Flags().BoolVar(&autoRetry, "auto-retry", false, "Automatically wait and retry when rate limited")
 
 	return cmd
 }

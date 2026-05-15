@@ -149,6 +149,15 @@ func NewApp(cfg *config.Config) *App {
 	}
 }
 
+// applyAutoRetry wraps the default executor in a RetryExecutor that automatically
+// waits and retries when Claude's usage quota is exceeded.
+func applyAutoRetry(app *App) {
+	retryExec := claude.NewRetryExecutor(app.Executor, 10)
+	if runner, ok := app.Runner.(*workflow.Runner); ok {
+		runner.SetDefaultExecutor(retryExec)
+	}
+}
+
 // applyReviewerOverride configures an alternative executor for the code-review workflow.
 //
 // When reviewer is "codex", a Codex executor is created and registered as the
