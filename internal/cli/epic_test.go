@@ -224,6 +224,162 @@ func TestEpicCommand_NoStoriesFoundReturnsError(t *testing.T) {
 	assert.Empty(t, mockRunner.ExecutedWorkflows)
 }
 
-// Note: Legacy tests removed - obsolete after lifecycle executor change.
-// The epic command now executes full lifecycle (multiple workflows per story), not single workflow routing.
-// See TestEpicCommand_FullLifecycleExecution for comprehensive lifecycle testing.
+func TestEpicCommand_MultipleEpics(t *testing.T) {
+	tests := []struct {
+		name              string
+		epicIDs           []string
+		statusYAML        string
+		expectedWorkflows []string
+		expectedStatuses  []StatusUpdate
+		expectError       bool
+		failOnWorkflow    string
+	}{
+		{
+			name:    "two epics run stories in epic order",
+			epicIDs: []string{"2", "3"},
+			statusYAML: `development_status:
+  2-1-auth: backlog
+  2-2-login: backlog
+  3-1-dashboard: backlog`,
+			expectedWorkflows: []string{
+				// Epic 2 stories first
+				"create-story", "dev-story", "code-review", "git-commit",
+				"create-story", "dev-story", "code-review", "git-commit",
+				// Then epic 3
+				"create-story", "dev-story", "code-review", "git-commit",
+			},
+			expectedStatuses: []StatusUpdate{
+				{StoryKey: "2-1-auth", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "2-1-auth", NewStatus: status.StatusReview},
+				{StoryKey: "2-1-auth", NewStatus: status.StatusDone},
+				{StoryKey: "2-1-auth", NewStatus: status.StatusDone},
+				{StoryKey: "2-2-login", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "2-2-login", NewStatus: status.StatusReview},
+				{StoryKey: "2-2-login", NewStatus: status.StatusDone},
+				{StoryKey: "2-2-login", NewStatus: status.StatusDone},
+				{StoryKey: "3-1-dashboard", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "3-1-dashboard", NewStatus: status.StatusReview},
+				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
+				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
+			},
+		},
+		{
+			name:    "three epics with mixed statuses",
+			epicIDs: []string{"2", "3", "4"},
+			statusYAML: `development_status:
+  2-1-auth: done
+  3-1-dashboard: ready-for-dev
+  4-1-deploy: review`,
+			expectedWorkflows: []string{
+				// Epic 2: done, skipped
+				// Epic 3: ready-for-dev
+				"dev-story", "code-review", "git-commit",
+				// Epic 4: review
+				"code-review", "git-commit",
+			},
+			expectedStatuses: []StatusUpdate{
+				{StoryKey: "3-1-dashboard", NewStatus: status.StatusReview},
+				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
+				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
+				{StoryKey: "4-1-deploy", NewStatus: status.StatusDone},
+				{StoryKey: "4-1-deploy", NewStatus: status.StatusDone},
+			},
+		},
+		{
+			name:    "failure in second epic stops processing",
+			epicIDs: []string{"2", "3"},
+			statusYAML: `development_status:
+  2-1-auth: backlog
+  3-1-dashboard: backlog`,
+			failOnWorkflow: "dev-story",
+			// Epic 2 story: create-story OK, dev-story fails
+			expectedWorkflows: []string{"create-story", "dev-story"},
+			expectedStatuses: []StatusUpdate{
+				{StoryKey: "2-1-auth", NewStatus: status.StatusReadyForDev},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			createSprintStatusFile(t, tmpDir, tt.statusYAML)
+
+			mockRunner := &MockWorkflowRunner{
+				FailOnWorkflow: tt.failOnWorkflow,
+			}
+			mockWriter := &MockStatusWriter{}
+			statusReader := status.NewReader(tmpDir)
+
+			app := &App{
+				Config:       config.DefaultConfig(),
+				StatusReader: statusReader,
+				StatusWriter: mockWriter,
+				Runner:       mockRunner,
+			}
+
+			rootCmd := NewRootCommand(app)
+			outBuf := &bytes.Buffer{}
+			rootCmd.SetOut(outBuf)
+			rootCmd.SetErr(outBuf)
+
+			args := append([]string{"epic"}, tt.epicIDs...)
+			rootCmd.SetArgs(args)
+
+			err := rootCmd.Execute()
+
+			if tt.expectError {
+				require.Error(t, err)
+				code, ok := IsExitError(err)
+				assert.True(t, ok)
+				assert.Equal(t, 1, code)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.expectedWorkflows, mockRunner.ExecutedWorkflows)
+
+			if tt.expectedStatuses != nil {
+				require.Len(t, mockWriter.Updates, len(tt.expectedStatuses))
+				for i, expected := range tt.expectedStatuses {
+					assert.Equal(t, expected.StoryKey, mockWriter.Updates[i].StoryKey)
+					assert.Equal(t, expected.NewStatus, mockWriter.Updates[i].NewStatus)
+				}
+			}
+		})
+	}
+}
+
+func TestEpicCommand_MultipleEpics_SecondEpicNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	createSprintStatusFile(t, tmpDir, `development_status:
+  2-1-auth: backlog`)
+
+	mockRunner := &MockWorkflowRunner{}
+	mockWriter := &MockStatusWriter{}
+	statusReader := status.NewReader(tmpDir)
+
+	app := &App{
+		Config:       config.DefaultConfig(),
+		StatusReader: statusReader,
+		StatusWriter: mockWriter,
+		Runner:       mockRunner,
+	}
+
+	rootCmd := NewRootCommand(app)
+	outBuf := &bytes.Buffer{}
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(outBuf)
+	rootCmd.SetArgs([]string{"epic", "2", "99"})
+
+	err := rootCmd.Execute()
+
+	require.Error(t, err)
+	code, ok := IsExitError(err)
+	assert.True(t, ok)
+	assert.Equal(t, 1, code)
+
+	// No workflows should execute since epic discovery fails before execution
+	assert.Empty(t, mockRunner.ExecutedWorkflows)
+}

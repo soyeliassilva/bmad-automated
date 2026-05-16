@@ -214,7 +214,8 @@ Flags available on epic, run, and queue commands:
 
 Examples:
   bmad-automate epic 1
-  bmad-automate epic 1 --git-local --reviewer codex --auto-retry
+  bmad-automate epic 2 3 4
+  bmad-automate epic 2 3 4 --git-local --reviewer codex --auto-retry
   bmad-automate run 7-1-define-schema --auto-retry
   bmad-automate queue 6-5 6-6 6-7 --git-local`,
 	}
