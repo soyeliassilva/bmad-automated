@@ -22,11 +22,15 @@ func newRunCommand(app *App) *cobra.Command {
 		Long: `Run the complete lifecycle for a story from its current status to done.
 
 The command executes all remaining workflows based on the story's current status:
-  - backlog       → create-story → dev-story → code-review → git-commit → done
-  - ready-for-dev → dev-story → code-review → git-commit → done
-  - in-progress   → dev-story → code-review → git-commit → done
+  - backlog       → build → git-commit → done
+  - ready-for-dev → build → git-commit → done
+  - in-progress   → build → git-commit → done
   - review        → code-review → git-commit → done
   - done          → no action (story already complete)
+
+build dispatches bmad-build-auto, which plans, implements and reviews the story
+in one unattended pass and commits its own diff. A build that halts blocked is
+detected from the story spec, so the story is never marked done by mistake.
 
 Status is updated in sprint-status.yaml after each successful workflow.
 

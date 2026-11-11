@@ -7,9 +7,12 @@ import (
 func newGitCommitCommand(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "git-commit <story-key>",
-		Short: "Commit and push changes for a story",
-		Long:  `Commit all changes for the specified story with a descriptive commit message and push to the current branch.`,
-		Args:  cobra.ExactArgs(1),
+		Short: "Commit leftover changes for a story and push",
+		Long: `Commit any uncommitted changes for the specified story and push to the current branch.
+
+bmad-build-auto commits its own reviewed diff without pushing, so after a build
+this usually only has the push left to do.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			storyKey := args[0]
 			ctx := cmd.Context()

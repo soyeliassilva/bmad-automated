@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"bmad-automate/internal/router"
 	"bmad-automate/internal/status"
@@ -39,6 +40,8 @@ func (m *MockWorkflowRunner) RunSingle(ctx context.Context, workflowName, storyK
 type MockStatusReader struct {
 	// GetStoryStatusFunc allows tests to control status reading behavior.
 	GetStoryStatusFunc func(storyKey string) (status.Status, error)
+	// ReadSpecFunc allows tests to control the build outcome reported by the spec.
+	ReadSpecFunc func(storyKey string) (*status.Spec, error)
 }
 
 func (m *MockStatusReader) GetStoryStatus(storyKey string) (status.Status, error) {
@@ -46,6 +49,13 @@ func (m *MockStatusReader) GetStoryStatus(storyKey string) (status.Status, error
 		return m.GetStoryStatusFunc(storyKey)
 	}
 	return status.StatusBacklog, nil
+}
+
+func (m *MockStatusReader) ReadSpec(storyKey string) (*status.Spec, error) {
+	if m.ReadSpecFunc != nil {
+		return m.ReadSpecFunc(storyKey)
+	}
+	return &status.Spec{Path: "spec-" + storyKey + ".md", Status: status.SpecDone, ModTime: time.Now()}, nil
 }
 
 // MockStatusWriter implements StatusWriter for testing.
@@ -97,21 +107,21 @@ func TestExecute(t *testing.T) {
 			name:          "story in backlog runs full lifecycle",
 			storyKey:      "EPIC-1-story",
 			currentStatus: status.StatusBacklog,
-			wantWorkflows: []string{"create-story", "dev-story", "code-review", "git-commit"},
-			wantUpdates:   []status.Status{status.StatusReadyForDev, status.StatusReview, status.StatusDone, status.StatusDone},
+			wantWorkflows: []string{router.WorkflowBuild, router.WorkflowGitCommit},
+			wantUpdates:   []status.Status{status.StatusReview, status.StatusDone},
 		},
 		{
-			name:          "story in ready-for-dev skips create-story",
+			name:          "story in ready-for-dev runs the same build lifecycle",
 			storyKey:      "EPIC-1-story",
 			currentStatus: status.StatusReadyForDev,
-			wantWorkflows: []string{"dev-story", "code-review", "git-commit"},
-			wantUpdates:   []status.Status{status.StatusReview, status.StatusDone, status.StatusDone},
+			wantWorkflows: []string{router.WorkflowBuild, router.WorkflowGitCommit},
+			wantUpdates:   []status.Status{status.StatusReview, status.StatusDone},
 		},
 		{
 			name:          "story in review runs code-review and git-commit",
 			storyKey:      "EPIC-1-story",
 			currentStatus: status.StatusReview,
-			wantWorkflows: []string{"code-review", "git-commit"},
+			wantWorkflows: []string{router.WorkflowCodeReview, router.WorkflowGitCommit},
 			wantUpdates:   []status.Status{status.StatusDone, status.StatusDone},
 		},
 		{
@@ -133,7 +143,7 @@ func TestExecute(t *testing.T) {
 			storyKey:       "EPIC-1-story",
 			currentStatus:  status.StatusBacklog,
 			workflowResult: 1, // first workflow fails
-			wantWorkflows:  []string{"create-story"},
+			wantWorkflows:  []string{router.WorkflowBuild},
 			wantUpdates:    nil, // no status updates if workflow fails
 		},
 		{
@@ -141,8 +151,8 @@ func TestExecute(t *testing.T) {
 			storyKey:      "EPIC-1-story",
 			currentStatus: status.StatusBacklog,
 			updateErr:     errors.New("write failed"),
-			wantWorkflows: []string{"create-story"},                  // workflow runs
-			wantUpdates:   []status.Status{status.StatusReadyForDev}, // update attempted
+			wantWorkflows: []string{router.WorkflowBuild},       // workflow runs
+			wantUpdates:   []status.Status{status.StatusReview}, // update attempted
 		},
 	}
 
@@ -222,30 +232,27 @@ func TestProgressCallback(t *testing.T) {
 		}
 	}{
 		{
-			name:          "backlog story calls callback 4 times",
+			name:          "backlog story calls callback twice",
 			currentStatus: status.StatusBacklog,
 			wantCalls: []struct {
 				stepIndex  int
 				totalSteps int
 				workflow   string
 			}{
-				{1, 4, "create-story"},
-				{2, 4, "dev-story"},
-				{3, 4, "code-review"},
-				{4, 4, "git-commit"},
+				{1, 2, router.WorkflowBuild},
+				{2, 2, router.WorkflowGitCommit},
 			},
 		},
 		{
-			name:          "ready-for-dev story calls callback 3 times",
-			currentStatus: status.StatusReadyForDev,
+			name:          "review story runs the extra review layer",
+			currentStatus: status.StatusReview,
 			wantCalls: []struct {
 				stepIndex  int
 				totalSteps int
 				workflow   string
 			}{
-				{1, 3, "dev-story"},
-				{2, 3, "code-review"},
-				{3, 3, "git-commit"},
+				{1, 2, router.WorkflowCodeReview},
+				{2, 2, router.WorkflowGitCommit},
 			},
 		},
 	}
@@ -305,7 +312,7 @@ func TestProgressCallbackNotSet(t *testing.T) {
 
 	err := executor.Execute(context.Background(), "test-story")
 	require.NoError(t, err)
-	assert.Len(t, runner.Calls, 4) // All 4 workflows should run
+	assert.Len(t, runner.Calls, 2) // build then git-commit
 }
 
 func TestGetSteps(t *testing.T) {
@@ -318,33 +325,30 @@ func TestGetSteps(t *testing.T) {
 		wantErr       error
 	}{
 		{
-			name:          "story in backlog returns all 4 steps",
+			name:          "story in backlog returns build then commit",
 			storyKey:      "EPIC-1-story",
 			currentStatus: status.StatusBacklog,
 			wantSteps: []router.LifecycleStep{
-				{Workflow: "create-story", NextStatus: status.StatusReadyForDev},
-				{Workflow: "dev-story", NextStatus: status.StatusReview},
-				{Workflow: "code-review", NextStatus: status.StatusDone},
-				{Workflow: "git-commit", NextStatus: status.StatusDone},
+				{Workflow: router.WorkflowBuild, NextStatus: status.StatusReview},
+				{Workflow: router.WorkflowGitCommit, NextStatus: status.StatusDone},
 			},
 		},
 		{
-			name:          "story in ready-for-dev returns 3 steps",
+			name:          "story in ready-for-dev returns build then commit",
 			storyKey:      "EPIC-1-story",
 			currentStatus: status.StatusReadyForDev,
 			wantSteps: []router.LifecycleStep{
-				{Workflow: "dev-story", NextStatus: status.StatusReview},
-				{Workflow: "code-review", NextStatus: status.StatusDone},
-				{Workflow: "git-commit", NextStatus: status.StatusDone},
+				{Workflow: router.WorkflowBuild, NextStatus: status.StatusReview},
+				{Workflow: router.WorkflowGitCommit, NextStatus: status.StatusDone},
 			},
 		},
 		{
-			name:          "story in review returns 2 steps",
+			name:          "story in review returns code-review then commit",
 			storyKey:      "EPIC-1-story",
 			currentStatus: status.StatusReview,
 			wantSteps: []router.LifecycleStep{
-				{Workflow: "code-review", NextStatus: status.StatusDone},
-				{Workflow: "git-commit", NextStatus: status.StatusDone},
+				{Workflow: router.WorkflowCodeReview, NextStatus: status.StatusDone},
+				{Workflow: router.WorkflowGitCommit, NextStatus: status.StatusDone},
 			},
 		},
 		{
@@ -397,6 +401,98 @@ func TestGetSteps(t *testing.T) {
 
 			// Verify no status updates were made
 			assert.Empty(t, writer.Calls, "GetSteps should not update any status")
+		})
+	}
+}
+
+// TestExecuteVerifiesBuildOutcome covers the case the exit code cannot see:
+// bmad-build-auto halts through its HALT protocol and still exits 0, so the
+// terminal status has to come from the story spec.
+func TestExecuteVerifiesBuildOutcome(t *testing.T) {
+	tests := []struct {
+		name          string
+		specStatus    status.SpecStatus
+		blocking      string
+		stale         bool
+		specErr       error
+		wantErr       string
+		wantWorkflows int
+		wantUpdates   int
+	}{
+		{
+			name:          "spec done lets the lifecycle continue",
+			specStatus:    status.SpecDone,
+			wantWorkflows: 2,
+			wantUpdates:   2,
+		},
+		{
+			name:          "blocked spec stops before the status advances",
+			specStatus:    status.SpecBlocked,
+			blocking:      "intent gap",
+			wantErr:       "intent gap",
+			wantWorkflows: 1,
+			wantUpdates:   0,
+		},
+		{
+			name:          "unfinished spec stops even without a blocking condition",
+			specStatus:    status.SpecInReview,
+			wantErr:       `status "in-review"`,
+			wantWorkflows: 1,
+			wantUpdates:   0,
+		},
+		{
+			name:          "missing spec falls back to the exit code",
+			specErr:       status.ErrSpecNotFound,
+			wantWorkflows: 2,
+			wantUpdates:   2,
+		},
+		{
+			name:          "stale spec from an earlier run is not read as this run's verdict",
+			specStatus:    status.SpecBlocked,
+			blocking:      "intent gap",
+			stale:         true,
+			wantWorkflows: 2,
+			wantUpdates:   2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &MockWorkflowRunner{}
+			reader := &MockStatusReader{
+				GetStoryStatusFunc: func(storyKey string) (status.Status, error) {
+					return status.StatusBacklog, nil
+				},
+				ReadSpecFunc: func(storyKey string) (*status.Spec, error) {
+					if tt.specErr != nil {
+						return nil, tt.specErr
+					}
+					// Resolved at call time so the spec is newer than the step start,
+					// which is what a real bmad-build-auto write looks like.
+					modTime := time.Now()
+					if tt.stale {
+						modTime = modTime.Add(-time.Hour)
+					}
+					return &status.Spec{
+						Path:     "spec-1-1-example.md",
+						Status:   tt.specStatus,
+						Blocking: tt.blocking,
+						ModTime:  modTime,
+					}, nil
+				},
+			}
+			writer := &MockStatusWriter{}
+
+			err := NewExecutor(runner, reader, writer).Execute(context.Background(), "1-1-example")
+
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+			assert.Len(t, runner.Calls, tt.wantWorkflows)
+			assert.Len(t, writer.Calls, tt.wantUpdates)
 		})
 	}
 }

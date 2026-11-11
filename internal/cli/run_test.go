@@ -132,35 +132,29 @@ func TestRunCommand_FullLifecycleExecution(t *testing.T) {
 		failOnWorkflow    string
 	}{
 		{
-			name:          "backlog story runs full lifecycle (4 workflows)",
+			name:          "backlog story runs build then commit",
 			storyKey:      "STORY-1",
 			initialStatus: "backlog",
 			expectedWorkflows: []string{
-				"create-story",
-				"dev-story",
-				"code-review",
+				"build",
 				"git-commit",
 			},
 			expectedStatuses: []status.Status{
-				status.StatusReadyForDev,
 				status.StatusReview,
-				status.StatusDone,
 				status.StatusDone,
 			},
 			expectError: false,
 		},
 		{
-			name:          "ready-for-dev story runs 3 workflows",
+			name:          "ready-for-dev story runs build then commit",
 			storyKey:      "STORY-2",
 			initialStatus: "ready-for-dev",
 			expectedWorkflows: []string{
-				"dev-story",
-				"code-review",
+				"build",
 				"git-commit",
 			},
 			expectedStatuses: []status.Status{
 				status.StatusReview,
-				status.StatusDone,
 				status.StatusDone,
 			},
 			expectError: false,
@@ -191,9 +185,9 @@ func TestRunCommand_FullLifecycleExecution(t *testing.T) {
 			name:              "workflow failure mid-lifecycle returns error",
 			storyKey:          "STORY-5",
 			initialStatus:     "backlog",
-			failOnWorkflow:    "dev-story",
-			expectedWorkflows: []string{"create-story", "dev-story"},
-			expectedStatuses:  []status.Status{status.StatusReadyForDev},
+			failOnWorkflow:    "git-commit",
+			expectedWorkflows: []string{"build", "git-commit"},
+			expectedStatuses:  []status.Status{status.StatusReview},
 			expectError:       true,
 		},
 	}

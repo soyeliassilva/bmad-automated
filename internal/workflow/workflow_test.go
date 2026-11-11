@@ -43,7 +43,7 @@ func TestRunner_RunSingle(t *testing.T) {
 	runner, mockExecutor, _ := setupTestRunner()
 
 	ctx := context.Background()
-	exitCode := runner.RunSingle(ctx, "create-story", "test-123")
+	exitCode := runner.RunSingle(ctx, "build", "test-123")
 
 	assert.Equal(t, 0, exitCode)
 	require.Len(t, mockExecutor.RecordedPrompts, 1)
@@ -77,8 +77,8 @@ func TestRunner_RunFullCycle_Success(t *testing.T) {
 	exitCode := runner.RunFullCycle(ctx, "test-story")
 
 	assert.Equal(t, 0, exitCode)
-	// Should have 4 prompts (one for each step in full cycle)
-	assert.Len(t, mockExecutor.RecordedPrompts, 4)
+	// Should have 2 prompts (one for each step in full cycle)
+	assert.Len(t, mockExecutor.RecordedPrompts, 2)
 }
 
 func TestRunner_RunFullCycle_FailAtStep(t *testing.T) {

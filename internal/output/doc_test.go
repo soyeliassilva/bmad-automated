@@ -22,8 +22,8 @@ func Example_printer() {
 	// captures: "● Session started"
 
 	// Step progress methods
-	printer.StepStart(1, 4, "create-story")
-	// captures: "[1/4] create-story"
+	printer.StepStart(1, 2, "build")
+	// captures: "[1/2] build"
 
 	// Verify printer captured output
 	if buf.Len() > 0 {
@@ -98,7 +98,7 @@ func Example_commandOutput() {
 	printer := output.NewPrinterWithWriter(&buf)
 
 	// Header shows command label and prompt
-	printer.CommandHeader("create-story", "Create story 7-1-define-schema", 80)
+	printer.CommandHeader("build", "Build story 7-1-define-schema", 80)
 
 	// ... command execution happens here ...
 
@@ -117,7 +117,7 @@ func Example_commandOutput() {
 func Example_stepResult() {
 	// StepResult tracks individual workflow step execution
 	step := output.StepResult{
-		Name:     "create-story",
+		Name:     "build",
 		Duration: 2 * time.Second,
 		Success:  true,
 	}
@@ -126,7 +126,7 @@ func Example_stepResult() {
 	fmt.Println("success:", step.Success)
 	fmt.Println("duration:", step.Duration)
 	// Output:
-	// step: create-story
+	// step: build
 	// success: true
 	// duration: 2s
 }
@@ -157,9 +157,8 @@ func Example_cycleSummary() {
 	printer := output.NewPrinterWithWriter(&buf)
 
 	steps := []output.StepResult{
-		{Name: "create-story", Duration: 2 * time.Second, Success: true},
-		{Name: "dev-story", Duration: 10 * time.Second, Success: true},
-		{Name: "code-review", Duration: 5 * time.Second, Success: true},
+		{Name: "build", Duration: 12 * time.Second, Success: true},
+		{Name: "git-commit", Duration: 5 * time.Second, Success: true},
 	}
 
 	printer.CycleSummary("7-1-story", steps, 17*time.Second)

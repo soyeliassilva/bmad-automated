@@ -1,30 +1,10 @@
 workflows:
-  create-story:
+  build:
     prompt_template: >-
-      /bmad-create-story - Create story: {{.StoryKey}}. Do not ask questions.
-      DEFERRED QUESTIONS: When you encounter uncertainty where documentation is
-      incomplete or ambiguous and you must assume a decision, do NOT stop. Make
-      your best judgment and proceed, but append the question to
-      _bmad-output/implementation-artifacts/deferred-questions.md using this
-      exact format per question:
-
-      ## {{.StoryKey}} — [Brief title of the uncertainty]
-
-      - **Question:** What you were uncertain about
-
-      - **Decision made:** What you chose and why
-
-      - **Alternatives:** Other viable options you considered
-
-      - **Confidence:** Low / Medium / High
-
-      - **Files affected:** List of files impacted by this decision
-
-  dev-story:
-    prompt_template: >-
-      /bmad-dev-story - Work on story: {{.StoryKey}}. Complete all tasks. Run
-      tests after each implementation. Do not ask clarifying questions - use
-      best judgment based on existing patterns.
+      /bmad-build-auto - Story: {{.StoryKey}}. Plan the spec, implement every
+      task, run the verification commands, and run the review with auto-fix,
+      all in one unattended pass. Do not ask clarifying questions - use best
+      judgment based on existing patterns.
       DEFERRED QUESTIONS: When you encounter uncertainty where documentation is
       incomplete or ambiguous and you must assume a decision, do NOT stop. Make
       your best judgment and proceed, but append the question to
@@ -45,9 +25,11 @@ workflows:
 
   code-review:
     prompt_template: >-
-      /bmad-code-review - Review story: {{.StoryKey}}. When presenting fix
-      options, always choose to auto-fix all issues immediately. Do not wait
-      for user input.
+      /bmad-code-review - Review story: {{.StoryKey}}. This is an extra layer on
+      top of the review the build already ran. Whenever you are asked how to
+      handle patch findings, always choose option 1, "Apply every patch", and
+      never wait for user input. Resolve decision-needed findings with best
+      judgment and record the reasoning instead of halting.
       DEFERRED QUESTIONS: When you encounter uncertainty where documentation is
       incomplete or ambiguous and you must assume a decision, do NOT stop. Make
       your best judgment and proceed, but append the question to
@@ -67,13 +49,11 @@ workflows:
       - **Files affected:** List of files impacted by this decision
 
   git-commit:
-    prompt_template: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format.{{if .GitLocal}} Do NOT push to remote. Only commit locally.{{else}} Then push to the current branch.{{end}} Do not ask questions."
+    prompt_template: "Commit any uncommitted changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Part of the work may already be committed by an earlier workflow, in which case commit only what remains.{{if .GitLocal}} Do NOT push to remote. Only commit locally.{{else}} Then push to the current branch.{{end}} Do not ask questions."
 
 full_cycle:
   steps:
-    - create-story
-    - dev-story
-    - code-review
+    - build
     - git-commit
 
 claude:

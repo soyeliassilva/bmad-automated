@@ -17,20 +17,16 @@ Reads current status, runs remaining workflows in sequence, auto-updates status 
 **Example output:**
 
 ```
-[1/4] create-story
+[1/2] build
   ... workflow output ...
 
-[2/4] dev-story
-  ... workflow output ...
-
-[3/4] code-review
-  ... workflow output ...
-
-[4/4] git-commit
+[2/2] git-commit
   ... workflow output ...
 
 Story AUTH-042 completed successfully
 ```
+
+`build` covers planning, implementation, verification and review in one step, so a story that is not yet in `review` only ever has two steps left.
 
 ---
 
@@ -46,11 +42,11 @@ bmad-automate run --dry-run AUTH-042
 
 ```
 Dry run for story AUTH-042:
-  1. create-story -> ready-for-dev
-  2. dev-story -> review
-  3. code-review -> done
-  4. git-commit -> done
+  1. build -> review
+  2. git-commit -> done
 ```
+
+A story already at `review` shows `code-review -> done` in place of `build`.
 
 Useful before committing to a long-running lifecycle.
 
@@ -61,14 +57,22 @@ Useful before committing to a long-running lifecycle.
 When a workflow fails, the tool saves state to `.bmad-state.json`. Re-run to continue from current status.
 
 ```bash
-# First run fails at dev-story
+# First run fails at build
 bmad-automate run AUTH-042
-# Error: workflow failed: dev-story returned exit code 1
+# Error: workflow failed: build returned exit code 1
 
 # Fix the issue, then re-run
 bmad-automate run AUTH-042
-# Continues from current status (in-progress)
+# Continues from the same status, since a failed step never advances it
 ```
+
+A build can also stop without failing. `bmad-build-auto` exits 0 when it halts deliberately, so the tool reads the story spec it wrote and refuses to advance the story when the frontmatter status is not `done`:
+
+```
+Error: build halted for AUTH-042 with status "blocked": acceptance criteria contradict the architecture (see _bmad-output/implementation-artifacts/spec-AUTH-042-add-login.md)
+```
+
+Resolve the blocking condition named in the spec, then re-run.
 
 State file is cleared automatically on successful completion.
 

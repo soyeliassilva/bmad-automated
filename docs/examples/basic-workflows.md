@@ -4,39 +4,29 @@ Single-story commands for step-by-step development.
 
 ---
 
-## Create a Story Definition
+## Build a Story
 
-Generate story requirements and acceptance criteria from a story key.
-
-```bash
-bmad-automate create-story AUTH-042
-```
-
-Creates the story definition file. Status moves from `backlog` to `ready-for-dev`.
-
----
-
-## Implement a Story
-
-Run the development workflow to implement a feature.
+Plan, implement and review a story in one unattended pass.
 
 ```bash
-bmad-automate dev-story AUTH-042
+bmad-automate build AUTH-042
 ```
 
-Claude implements the story, runs tests after each change. Status moves to `review` on success.
+Claude writes the story spec, implements every task, runs the verification commands, then runs an adversarial review with auto-fix. It commits its own reviewed diff but never pushes, so it needs a clean working tree to start. Status moves to `review` on success.
+
+If the build halts instead of finishing, it still exits 0 and records the reason in the story spec. `run`, `queue` and `epic` read that spec and stop rather than treating the story as done.
 
 ---
 
 ## Review Code Changes
 
-Run code review on story changes with auto-fix.
+Run an extra review layer on story changes with auto-fix.
 
 ```bash
 bmad-automate code-review AUTH-042
 ```
 
-Claude reviews for quality issues, security vulnerabilities, and missing tests. Automatically applies fixes.
+Claude reviews for quality issues, security vulnerabilities, and missing tests. Automatically applies fixes. This sits on top of the review `build` already ran, so it is optional after a build.
 
 ---
 
@@ -48,7 +38,7 @@ Create a conventional commit and push to remote.
 bmad-automate git-commit AUTH-042
 ```
 
-Claude creates a commit with conventional format (e.g., `feat(auth): add login endpoint`), then pushes to the current branch.
+Claude commits anything left uncommitted using conventional format (e.g., `feat(auth): add login endpoint`), then pushes to the current branch. After a build there is usually only the push left to do.
 
 ---
 

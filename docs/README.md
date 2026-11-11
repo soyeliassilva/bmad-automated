@@ -43,7 +43,7 @@ go install ./cmd/bmad-automate
 
 ```bash
 # Process a story through its full lifecycle to done
-# (automatically runs: create-story -> dev-story -> code-review -> git-commit)
+# (automatically runs: build -> git-commit)
 bmad-automate run PROJ-123
 
 # Preview what workflows would run without executing
@@ -63,10 +63,9 @@ bmad-automate raw "What files need tests?"
 
 | Command        | Purpose                                        |
 | -------------- | ---------------------------------------------- |
-| `create-story` | Create story definition                        |
-| `dev-story`    | Implement a story                              |
-| `code-review`  | Review code changes                            |
-| `git-commit`   | Commit and push                                |
+| `build`        | Plan, implement and review a story in one pass |
+| `code-review`  | Run an extra review layer                      |
+| `git-commit`   | Commit anything left over and push             |
 | `run`          | Execute full lifecycle to done (with resume)   |
 | `queue`        | Batch process stories through lifecycles       |
 | `epic`         | Process all stories in epic through lifecycles |
@@ -82,12 +81,10 @@ Default configuration file: `config/workflows.yaml`
 
 ```yaml
 workflows:
-  create-story:
-    prompt_template: "Create story: {{.StoryKey}}"
-  dev-story:
-    prompt_template: "Implement story: {{.StoryKey}}"
+  build:
+    prompt_template: "/bmad-build-auto - Story: {{.StoryKey}}"
   code-review:
-    prompt_template: "Review story: {{.StoryKey}}"
+    prompt_template: "/bmad-code-review - Review story: {{.StoryKey}}"
   git-commit:
     prompt_template: "Commit changes for: {{.StoryKey}}"
 ```

@@ -24,9 +24,9 @@ func newQueueCommand(app *App) *cobra.Command {
 Each story is run to completion before moving to the next.
 
 For each story, executes all remaining workflows based on its current status:
-  - backlog       → create-story → dev-story → code-review → git-commit → done
-  - ready-for-dev → dev-story → code-review → git-commit → done
-  - in-progress   → dev-story → code-review → git-commit → done
+  - backlog       → build → git-commit → done
+  - ready-for-dev → build → git-commit → done
+  - in-progress   → build → git-commit → done
   - review        → code-review → git-commit → done
   - done          → skipped (story already complete)
 

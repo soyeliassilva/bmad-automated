@@ -1,18 +1,21 @@
 // Package lifecycle orchestrates story lifecycle execution from current status to done.
 //
 // The lifecycle package provides [Executor] which runs stories through their complete
-// workflow sequence (create->dev->review->commit) based on current status. Each step
-// updates the story status automatically after successful completion.
+// workflow sequence (build->commit) based on current status. Each step updates the
+// story status automatically after successful completion.
 //
 // Key concepts:
 //   - Lifecycle steps are determined by [router.GetLifecycle] based on current status
 //   - Each step runs a workflow then updates status via [StatusWriter]
+//   - Build steps are verified against the story spec before the status advances
 //   - Progress can be tracked via [ProgressCallback]
 package lifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"bmad-automate/internal/router"
 	"bmad-automate/internal/status"
@@ -29,10 +32,12 @@ type WorkflowRunner interface {
 
 // StatusReader is the interface for looking up story status.
 //
-// GetStoryStatus retrieves the current [status.Status] for a story key.
-// It returns an error if the story cannot be found or the status file is invalid.
+// GetStoryStatus retrieves the current [status.Status] for a story key from
+// sprint-status.yaml. ReadSpec retrieves the outcome bmad-build-auto recorded in
+// the story spec, which is the only reliable signal of whether a build finished.
 type StatusReader interface {
 	GetStoryStatus(storyKey string) (status.Status, error)
+	ReadSpec(storyKey string) (*status.Spec, error)
 }
 
 // StatusWriter is the interface for persisting story status updates.
@@ -92,7 +97,8 @@ func (e *Executor) SetProgressCallback(cb ProgressCallback) {
 //
 // Execute uses fail-fast behavior: it stops on the first error and returns immediately.
 // Errors can occur from status lookup failure, workflow execution failure (non-zero exit),
-// or status update failure. For stories already done, Execute returns [router.ErrStoryComplete].
+// a build that halted instead of completing, or status update failure. For stories
+// already done, Execute returns [router.ErrStoryComplete].
 func (e *Executor) Execute(ctx context.Context, storyKey string) error {
 	// Get current story status
 	currentStatus, err := e.statusReader.GetStoryStatus(storyKey)
@@ -117,9 +123,17 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error {
 		}
 
 		// Run the workflow
+		startedAt := time.Now()
 		exitCode := e.runner.RunSingle(ctx, step.Workflow, storyKey)
 		if exitCode != 0 {
 			return fmt.Errorf("workflow failed: %s returned exit code %d", step.Workflow, exitCode)
+		}
+
+		// A build that halted still exits 0, so confirm it actually finished
+		if step.Workflow == router.WorkflowBuild {
+			if err := e.verifyBuild(storyKey, startedAt); err != nil {
+				return err
+			}
 		}
 
 		// Update status after successful workflow
@@ -129,6 +143,42 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error {
 	}
 
 	return nil
+}
+
+// verifyBuild confirms bmad-build-auto ran to completion rather than halting.
+//
+// bmad-build-auto ends a blocked run through its HALT protocol, which writes a
+// terminal status and a blocking condition into the story spec and then exits
+// normally. The CLI exit code is 0 either way, so without this check a story that
+// stopped on an intent gap would be recorded as done.
+//
+// A missing spec is reported and tolerated, since the outcome cannot be read and
+// the exit code is the only remaining signal. A spec older than startedAt was left
+// behind by an earlier run and says nothing about this one, so it is tolerated the
+// same way rather than being read as this run's verdict.
+func (e *Executor) verifyBuild(storyKey string, startedAt time.Time) error {
+	spec, err := e.statusReader.ReadSpec(storyKey)
+	if errors.Is(err, status.ErrSpecNotFound) {
+		fmt.Printf("Warning: cannot verify build outcome for %s: %v\n", storyKey, err)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if spec.ModTime.Before(startedAt) {
+		fmt.Printf("Warning: cannot verify build outcome for %s: %s predates this run\n", storyKey, spec.Path)
+		return nil
+	}
+
+	if spec.Status == status.SpecDone {
+		return nil
+	}
+
+	if spec.Blocking != "" {
+		return fmt.Errorf("build halted for %s with status %q: %s (see %s)", storyKey, spec.Status, spec.Blocking, spec.Path)
+	}
+	return fmt.Errorf("build halted for %s with status %q (see %s)", storyKey, spec.Status, spec.Path)
 }
 
 // GetSteps returns the remaining lifecycle steps for a story without executing them.

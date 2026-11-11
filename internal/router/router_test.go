@@ -16,27 +16,27 @@ func TestGetWorkflow(t *testing.T) {
 		wantErrMessage string
 	}{
 		{
-			name:         "backlog status returns create-story workflow",
+			name:         "backlog status returns build workflow",
 			status:       status.StatusBacklog,
-			wantWorkflow: "create-story",
+			wantWorkflow: WorkflowBuild,
 			wantErr:      nil,
 		},
 		{
-			name:         "ready-for-dev status returns dev-story workflow",
+			name:         "ready-for-dev status returns build workflow",
 			status:       status.StatusReadyForDev,
-			wantWorkflow: "dev-story",
+			wantWorkflow: WorkflowBuild,
 			wantErr:      nil,
 		},
 		{
-			name:         "in-progress status returns dev-story workflow",
+			name:         "in-progress status returns build workflow",
 			status:       status.StatusInProgress,
-			wantWorkflow: "dev-story",
+			wantWorkflow: WorkflowBuild,
 			wantErr:      nil,
 		},
 		{
 			name:         "review status returns code-review workflow",
 			status:       status.StatusReview,
-			wantWorkflow: "code-review",
+			wantWorkflow: WorkflowCodeReview,
 			wantErr:      nil,
 		},
 		{

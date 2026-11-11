@@ -18,6 +18,22 @@ import (
 	"bmad-automate/internal/status"
 )
 
+// Workflow names emitted by the router. These must match keys in the workflows
+// configuration.
+const (
+	// WorkflowBuild dispatches bmad-build-auto, which plans, implements and
+	// reviews a story in a single unattended pass.
+	WorkflowBuild = "build"
+
+	// WorkflowCodeReview dispatches bmad-code-review, an optional extra review
+	// layer on top of the one bmad-build-auto already runs.
+	WorkflowCodeReview = "code-review"
+
+	// WorkflowGitCommit commits any leftover changes and pushes. bmad-build-auto
+	// commits its own reviewed diff but never pushes.
+	WorkflowGitCommit = "git-commit"
+)
+
 // Sentinel errors for workflow routing.
 var (
 	// ErrStoryComplete is a sentinel error indicating the story has status "done"
@@ -35,9 +51,8 @@ var (
 //
 // This is the single-step router used by commands that execute one workflow at a time.
 // The mapping is:
-//   - backlog -> "create-story"
-//   - ready-for-dev, in-progress -> "dev-story"
-//   - review -> "code-review"
+//   - backlog, ready-for-dev, in-progress -> [WorkflowBuild]
+//   - review -> [WorkflowCodeReview]
 //   - done -> [ErrStoryComplete]
 //
 // Returns [ErrStoryComplete] for done stories (caller should skip, not fail).
@@ -46,12 +61,10 @@ var (
 // See [status.Status] for valid status values.
 func GetWorkflow(s status.Status) (string, error) {
 	switch s {
-	case status.StatusBacklog:
-		return "create-story", nil
-	case status.StatusReadyForDev, status.StatusInProgress:
-		return "dev-story", nil
+	case status.StatusBacklog, status.StatusReadyForDev, status.StatusInProgress:
+		return WorkflowBuild, nil
 	case status.StatusReview:
-		return "code-review", nil
+		return WorkflowCodeReview, nil
 	case status.StatusDone:
 		return "", ErrStoryComplete
 	default:

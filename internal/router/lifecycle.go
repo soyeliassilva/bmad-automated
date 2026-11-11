@@ -27,10 +27,14 @@ type LifecycleStep struct {
 // GetLifecycle returns all remaining steps needed to complete the story.
 //
 // The sequences are:
-//   - backlog: create-story -> dev-story -> code-review -> git-commit -> done
-//   - ready-for-dev, in-progress: dev-story -> code-review -> git-commit -> done
+//   - backlog, ready-for-dev, in-progress: build -> git-commit -> done
 //   - review: code-review -> git-commit -> done
 //   - done: [ErrStoryComplete]
+//
+// Planning, implementation and review used to be three separate steps. BMad 6.11
+// collapsed all three into bmad-build-auto, so [WorkflowBuild] covers the whole
+// span from backlog to reviewed code. A story already at "review" skips build and
+// gets the optional extra review layer instead.
 //
 // Returns [ErrStoryComplete] for done stories (caller should skip, not fail).
 // Returns [ErrUnknownStatus] for unrecognized status values (likely YAML typo).
@@ -38,23 +42,15 @@ type LifecycleStep struct {
 // See [status.Status] for valid status values.
 func GetLifecycle(s status.Status) ([]LifecycleStep, error) {
 	switch s {
-	case status.StatusBacklog:
+	case status.StatusBacklog, status.StatusReadyForDev, status.StatusInProgress:
 		return []LifecycleStep{
-			{Workflow: "create-story", NextStatus: status.StatusReadyForDev},
-			{Workflow: "dev-story", NextStatus: status.StatusReview},
-			{Workflow: "code-review", NextStatus: status.StatusDone},
-			{Workflow: "git-commit", NextStatus: status.StatusDone},
-		}, nil
-	case status.StatusReadyForDev, status.StatusInProgress:
-		return []LifecycleStep{
-			{Workflow: "dev-story", NextStatus: status.StatusReview},
-			{Workflow: "code-review", NextStatus: status.StatusDone},
-			{Workflow: "git-commit", NextStatus: status.StatusDone},
+			{Workflow: WorkflowBuild, NextStatus: status.StatusReview},
+			{Workflow: WorkflowGitCommit, NextStatus: status.StatusDone},
 		}, nil
 	case status.StatusReview:
 		return []LifecycleStep{
-			{Workflow: "code-review", NextStatus: status.StatusDone},
-			{Workflow: "git-commit", NextStatus: status.StatusDone},
+			{Workflow: WorkflowCodeReview, NextStatus: status.StatusDone},
+			{Workflow: WorkflowGitCommit, NextStatus: status.StatusDone},
 		}, nil
 	case status.StatusDone:
 		return nil, ErrStoryComplete

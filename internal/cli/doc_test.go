@@ -56,20 +56,19 @@ func Example_commands() {
 	//   epic <epic-id>      - Process all stories in an epic
 	//
 	// Individual workflow commands:
-	//   create-story <key>  - Create story from backlog
-	//   dev-story <key>     - Develop story (ready-for-dev or in-progress)
-	//   code-review <key>   - Review code (review status)
-	//   git-commit <key>    - Commit changes after review
+	//   build <key>         - Plan, implement and review in one unattended pass
+	//   code-review <key>   - Run an extra review layer (review status)
+	//   git-commit <key>    - Commit anything left over and push
 	//
 	// Direct execution:
 	//   raw <prompt>        - Execute a raw prompt directly
 
 	fmt.Println("Lifecycle: run, queue, epic")
-	fmt.Println("Workflows: create-story, dev-story, code-review, git-commit")
+	fmt.Println("Workflows: build, code-review, git-commit")
 	fmt.Println("Direct: raw")
 	// Output:
 	// Lifecycle: run, queue, epic
-	// Workflows: create-story, dev-story, code-review, git-commit
+	// Workflows: build, code-review, git-commit
 	// Direct: raw
 }
 
@@ -121,7 +120,7 @@ func Example_workflowRunner() {
 	ctx := context.Background()
 
 	// Run a named workflow
-	exitCode := mock.RunSingle(ctx, "create-story", "7-1-define-schema")
+	exitCode := mock.RunSingle(ctx, "build", "7-1-define-schema")
 	fmt.Println("workflow exit code:", exitCode)
 
 	// Run a raw prompt

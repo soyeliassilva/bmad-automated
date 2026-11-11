@@ -44,11 +44,11 @@ func TestDefaultPrinter_StepStart(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewPrinterWithWriter(&buf)
 
-	p.StepStart(1, 4, "create-story")
+	p.StepStart(1, 2, "build")
 
 	output := buf.String()
-	assert.Contains(t, output, "[1/4]")
-	assert.Contains(t, output, "create-story")
+	assert.Contains(t, output, "[1/2]")
+	assert.Contains(t, output, "build")
 }
 
 func TestDefaultPrinter_ToolUse(t *testing.T) {
@@ -121,10 +121,10 @@ func TestDefaultPrinter_CommandHeader(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewPrinterWithWriter(&buf)
 
-	p.CommandHeader("create-story: test-123", "Long prompt here", 20)
+	p.CommandHeader("build: test-123", "Long prompt here", 20)
 
 	output := buf.String()
-	assert.Contains(t, output, "create-story: test-123")
+	assert.Contains(t, output, "build: test-123")
 }
 
 func TestDefaultPrinter_CommandFooter_Success(t *testing.T) {
@@ -164,8 +164,8 @@ func TestDefaultPrinter_CycleSummary(t *testing.T) {
 	p := NewPrinterWithWriter(&buf)
 
 	steps := []StepResult{
-		{Name: "create-story", Duration: 10 * time.Second, Success: true},
-		{Name: "dev-story", Duration: 30 * time.Second, Success: true},
+		{Name: "build", Duration: 30 * time.Second, Success: true},
+		{Name: "git-commit", Duration: 10 * time.Second, Success: true},
 	}
 
 	p.CycleSummary("test-story", steps, 40*time.Second)
@@ -173,20 +173,20 @@ func TestDefaultPrinter_CycleSummary(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "CYCLE COMPLETE")
 	assert.Contains(t, output, "test-story")
-	assert.Contains(t, output, "create-story")
-	assert.Contains(t, output, "dev-story")
+	assert.Contains(t, output, "build")
+	assert.Contains(t, output, "git-commit")
 }
 
 func TestDefaultPrinter_CycleFailed(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewPrinterWithWriter(&buf)
 
-	p.CycleFailed("test-story", "dev-story", 15*time.Second)
+	p.CycleFailed("test-story", "build", 15*time.Second)
 
 	output := buf.String()
 	assert.Contains(t, output, "CYCLE FAILED")
 	assert.Contains(t, output, "test-story")
-	assert.Contains(t, output, "dev-story")
+	assert.Contains(t, output, "build")
 }
 
 func TestDefaultPrinter_QueueHeader(t *testing.T) {
@@ -234,7 +234,7 @@ func TestDefaultPrinter_QueueSummary_WithFailure(t *testing.T) {
 
 	results := []StoryResult{
 		{Key: "story-1", Success: true, Duration: 10 * time.Second},
-		{Key: "story-2", Success: false, Duration: 5 * time.Second, FailedAt: "dev-story"},
+		{Key: "story-2", Success: false, Duration: 5 * time.Second, FailedAt: "build"},
 	}
 
 	p.QueueSummary(results, []string{"story-1", "story-2", "story-3"}, 15*time.Second)

@@ -8,6 +8,11 @@ import (
 )
 
 func TestGetLifecycle(t *testing.T) {
+	buildThenCommit := []LifecycleStep{
+		{Workflow: WorkflowBuild, NextStatus: status.StatusReview},
+		{Workflow: WorkflowGitCommit, NextStatus: status.StatusDone},
+	}
+
 	tests := []struct {
 		name      string
 		status    status.Status
@@ -15,44 +20,27 @@ func TestGetLifecycle(t *testing.T) {
 		wantErr   error
 	}{
 		{
-			name:   "backlog status returns full lifecycle",
-			status: status.StatusBacklog,
-			wantSteps: []LifecycleStep{
-				{Workflow: "create-story", NextStatus: status.StatusReadyForDev},
-				{Workflow: "dev-story", NextStatus: status.StatusReview},
-				{Workflow: "code-review", NextStatus: status.StatusDone},
-				{Workflow: "git-commit", NextStatus: status.StatusDone},
-			},
-			wantErr: nil,
+			name:      "backlog status returns build then commit",
+			status:    status.StatusBacklog,
+			wantSteps: buildThenCommit,
 		},
 		{
-			name:   "ready-for-dev status returns dev through commit",
-			status: status.StatusReadyForDev,
-			wantSteps: []LifecycleStep{
-				{Workflow: "dev-story", NextStatus: status.StatusReview},
-				{Workflow: "code-review", NextStatus: status.StatusDone},
-				{Workflow: "git-commit", NextStatus: status.StatusDone},
-			},
-			wantErr: nil,
+			name:      "ready-for-dev status returns build then commit",
+			status:    status.StatusReadyForDev,
+			wantSteps: buildThenCommit,
 		},
 		{
-			name:   "in-progress status returns dev through commit",
-			status: status.StatusInProgress,
-			wantSteps: []LifecycleStep{
-				{Workflow: "dev-story", NextStatus: status.StatusReview},
-				{Workflow: "code-review", NextStatus: status.StatusDone},
-				{Workflow: "git-commit", NextStatus: status.StatusDone},
-			},
-			wantErr: nil,
+			name:      "in-progress status returns build then commit",
+			status:    status.StatusInProgress,
+			wantSteps: buildThenCommit,
 		},
 		{
-			name:   "review status returns review through commit",
+			name:   "review status skips build and runs the extra review layer",
 			status: status.StatusReview,
 			wantSteps: []LifecycleStep{
-				{Workflow: "code-review", NextStatus: status.StatusDone},
-				{Workflow: "git-commit", NextStatus: status.StatusDone},
+				{Workflow: WorkflowCodeReview, NextStatus: status.StatusDone},
+				{Workflow: WorkflowGitCommit, NextStatus: status.StatusDone},
 			},
-			wantErr: nil,
 		},
 		{
 			name:      "done status returns ErrStoryComplete",

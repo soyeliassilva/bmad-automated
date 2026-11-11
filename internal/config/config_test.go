@@ -13,13 +13,12 @@ func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
 	// Check workflows exist
-	assert.Contains(t, cfg.Workflows, "create-story")
-	assert.Contains(t, cfg.Workflows, "dev-story")
+	assert.Contains(t, cfg.Workflows, "build")
 	assert.Contains(t, cfg.Workflows, "code-review")
 	assert.Contains(t, cfg.Workflows, "git-commit")
 
 	// Check full cycle steps
-	assert.Equal(t, []string{"create-story", "dev-story", "code-review", "git-commit"}, cfg.FullCycle.Steps)
+	assert.Equal(t, []string{"build", "git-commit"}, cfg.FullCycle.Steps)
 
 	// Check defaults
 	assert.Equal(t, "stream-json", cfg.Claude.OutputFormat)
@@ -39,15 +38,15 @@ func TestConfig_GetPrompt(t *testing.T) {
 		wantErr      bool
 	}{
 		{
-			name:         "create-story",
-			workflowName: "create-story",
+			name:         "build",
+			workflowName: "build",
 			storyKey:     "test-123",
 			wantContains: "test-123",
 			wantErr:      false,
 		},
 		{
-			name:         "dev-story",
-			workflowName: "dev-story",
+			name:         "code-review",
+			workflowName: "code-review",
 			storyKey:     "feature-456",
 			wantContains: "feature-456",
 			wantErr:      false,
@@ -77,7 +76,7 @@ func TestConfig_GetFullCycleSteps(t *testing.T) {
 	cfg := DefaultConfig()
 	steps := cfg.GetFullCycleSteps()
 
-	assert.Equal(t, []string{"create-story", "dev-story", "code-review", "git-commit"}, steps)
+	assert.Equal(t, []string{"build", "git-commit"}, steps)
 }
 
 func TestLoader_LoadFromFile(t *testing.T) {
@@ -292,7 +291,7 @@ func TestMustLoad_Success(t *testing.T) {
 func TestConfig_GetPrompt_AllWorkflows(t *testing.T) {
 	cfg := DefaultConfig()
 
-	workflows := []string{"create-story", "dev-story", "code-review", "git-commit"}
+	workflows := []string{"build", "code-review", "git-commit"}
 
 	for _, wf := range workflows {
 		t.Run(wf, func(t *testing.T) {

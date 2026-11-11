@@ -4,13 +4,14 @@ A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-ME
 
 ## Overview
 
-`bmad-automate` orchestrates Claude to run [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) development workflows including story creation, implementation, code review, and git operations. It's designed to automate repetitive development tasks by delegating them to Claude with predefined prompts.
+`bmad-automate` orchestrates Claude to run [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) development workflows including story planning, implementation, code review, and git operations. It's designed to automate repetitive development tasks by delegating them to Claude with predefined prompts.
 
 ## Features
 
-- **Workflow Automation** - Run predefined workflows (create-story, dev-story, code-review, git-commit)
+- **Workflow Automation** - Run predefined workflows (build, code-review, git-commit)
 - **Status-Based Routing** - Automatically determines next workflow based on story status
 - **Full Lifecycle Execution** - Run a story from current status to completion with a single command
+- **Build Outcome Verification** - Reads the story spec after a build and refuses to advance a story whose build halted, because the Claude CLI exits 0 either way
 - **Epic Processing** - Process all stories in an epic in order
 - **Queue Processing** - Process multiple stories in batch
 - **Deferred Questions** - Claude logs uncertainties to a file instead of blocking, so you can review and resolve them after automation completes
@@ -26,6 +27,7 @@ A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-ME
 
 - Go 1.21 or later
 - [Claude CLI](https://github.com/anthropics/claude-code) installed and configured
+- [uv](https://github.com/astral-sh/uv) on PATH, because `bmad-build-auto` renders itself through `uv run _bmad/scripts/render_skill.py` and halts without it
 - [just](https://github.com/casey/just) (optional, for running tasks)
 
 ### From Source
@@ -54,18 +56,19 @@ just build
 ### Single Workflow Commands
 
 ```bash
-# Create a story definition
-bmad-automate create-story <story-key> # eg 1-5
+# Plan, implement and review a story in one pass
+bmad-automate build <story-key> # eg 1-5
 
-# Implement a story
-bmad-automate dev-story <story-key>
-
-# Run code review
+# Run an extra review layer
 bmad-automate code-review <story-key>
 
-# Commit and push changes
+# Commit whatever is left and push
 bmad-automate git-commit <story-key>
 ```
+
+`build` dispatches `/bmad-build-auto`, which plans the story spec, implements every task, runs the verification commands and runs an adversarial review with auto-fix, all in a single unattended pass. It commits its own reviewed diff but never pushes, and it needs a clean working tree to start.
+
+`code-review` is an optional extra review layer on top of the review the build already ran. `git-commit` commits anything left uncommitted and pushes, which after a build is usually just the push.
 
 ### Full Lifecycle
 
@@ -77,13 +80,15 @@ bmad-automate run <story-key>
 
 This executes all remaining workflows based on the story's current status:
 
-- `backlog` → create-story → dev-story → code-review → git-commit → done
-- `ready-for-dev` → dev-story → code-review → git-commit → done
-- `in-progress` → dev-story → code-review → git-commit → done
+- `backlog` → build → git-commit → done
+- `ready-for-dev` → build → git-commit → done
+- `in-progress` → build → git-commit → done
 - `review` → code-review → git-commit → done
 - `done` → skipped (story already complete)
 
 Status is automatically updated in `sprint-status.yaml` after each successful workflow.
+
+After a build, the tool reads the story spec `bmad-build-auto` wrote and checks its frontmatter status, because the Claude CLI exits 0 even when `bmad-build-auto` deliberately halts. If that status is not `done`, the run stops with an error naming the status and the blocking condition, and the story is not advanced in `sprint-status.yaml`.
 
 Preview what workflows would run without executing them:
 
@@ -190,11 +195,8 @@ Create a `config/workflows.yaml` file to customize workflow prompts:
 
 ```yaml
 workflows:
-  create-story:
+  build:
     prompt_template: "Your custom prompt for {{.StoryKey}}"
-
-  dev-story:
-    prompt_template: "Your dev prompt for {{.StoryKey}}"
 
   code-review:
     prompt_template: "Your review prompt for {{.StoryKey}}"
@@ -204,9 +206,7 @@ workflows:
 
 full_cycle:
   steps:
-    - create-story
-    - dev-story
-    - code-review
+    - build
     - git-commit
 
 claude:

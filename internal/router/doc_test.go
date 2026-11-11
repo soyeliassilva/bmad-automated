@@ -35,8 +35,8 @@ func Example_getWorkflow() {
 	_, err = router.GetWorkflow(status.StatusDone)
 	fmt.Println("Done story complete:", errors.Is(err, router.ErrStoryComplete))
 	// Output:
-	// Backlog workflow: create-story
-	// Ready-for-dev workflow: dev-story
+	// Backlog workflow: build
+	// Ready-for-dev workflow: build
 	// Review workflow: code-review
 	// Done story complete: true
 }
@@ -48,7 +48,8 @@ func Example_getLifecycle() {
 	// GetLifecycle returns all remaining steps to complete a story.
 	// Each step includes the workflow to run and the next status to set.
 
-	// A backlog story needs all steps: create -> dev -> review -> commit
+	// A backlog story needs build then commit. bmad-build-auto covers planning,
+	// implementation and review in the single build step.
 	steps, err := router.GetLifecycle(status.StatusBacklog)
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -66,8 +67,8 @@ func Example_getLifecycle() {
 	_, err = router.GetLifecycle(status.StatusDone)
 	fmt.Println("Done story complete:", errors.Is(err, router.ErrStoryComplete))
 	// Output:
-	// Backlog steps: 4
-	// First step workflow: create-story
+	// Backlog steps: 2
+	// First step workflow: build
 	// Review steps: 2
 	// First step workflow: code-review
 	// Done story complete: true

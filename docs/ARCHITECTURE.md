@@ -68,7 +68,7 @@ Comprehensive architecture documentation for `bmad-automate`.
 │  │   - StateManager   *state.Manager                         │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  Commands: create-story, dev-story, code-review, git-commit,    │
+│  Commands: build, code-review, git-commit,                      │
 │            run, queue, epic, raw                                │
 └─────────────────────────────────────────────────────────────────┘
                                   │
@@ -129,7 +129,7 @@ Comprehensive architecture documentation for `bmad-automate`.
 │                   │  │                   │  │                   │
 │  - Manager        │  │  - Reader         │  │  - GetWorkflow()  │
 │  - Save()         │  │  - GetStoryStatus │  │  - GetLifecycle() │
-│  - Load()         │  │                   │  │  - LifecycleStep  │
+│  - Load()         │  │  - ReadSpec       │  │  - LifecycleStep  │
 │  - Clear()        │  │                   │  │                   │
 └───────────────────┘  └───────────────────┘  └───────────────────┘
 ```
@@ -171,23 +171,23 @@ cmd/bmad-automate/main.go
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  User: bmad-automate create-story PROJ-123                               │
+│  User: bmad-automate build PROJ-123                                      │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  1. CLI Layer                                                            │
 │     - Cobra parses command and arguments                                 │
-│     - Routes to create-story command handler                             │
-│     - Handler calls: runner.RunSingle(ctx, "create-story", "PROJ-123")   │
+│     - Routes to build command handler                                    │
+│     - Handler calls: runner.RunSingle(ctx, "build", "PROJ-123")          │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  2. Config Layer                                                         │
-│     - config.GetPrompt("create-story", "PROJ-123")                       │
-│     - Template: "/bmad:...:create-story - Create story: {{.StoryKey}}"   │
-│     - Expanded: "/bmad:...:create-story - Create story: PROJ-123"        │
+│     - config.GetPrompt("build", "PROJ-123")                              │
+│     - Template: "/bmad-build-auto - Story: {{.StoryKey}}. ..."           │
+│     - Expanded: "/bmad-build-auto - Story: PROJ-123. ..."                │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -240,12 +240,12 @@ cmd/bmad-automate/main.go
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  2. Router                                                                 │
-│     - router.GetWorkflow("ready-for-dev") → "dev-story"                    │
+│     - router.GetWorkflow("ready-for-dev") → "build"                        │
 │                                                                            │
 │     Routing Table:                                                         │
-│       backlog       → create-story                                         │
-│       ready-for-dev → dev-story                                            │
-│       in-progress   → dev-story                                            │
+│       backlog       → build                                                │
+│       ready-for-dev → build                                                │
+│       in-progress   → build                                                │
 │       review        → code-review                                          │
 │       done          → ErrStoryComplete                                     │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -253,7 +253,7 @@ cmd/bmad-automate/main.go
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  3. Workflow Execution                                                     │
-│     - runner.RunSingle(ctx, "dev-story", "PROJ-123")                       │
+│     - runner.RunSingle(ctx, "build", "PROJ-123")                           │
 │     - (same flow as single workflow execution)                             │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -302,13 +302,11 @@ The lifecycle executor runs stories through their complete workflow sequence fro
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  2. Get Lifecycle Steps                                                    │
-│     - router.GetLifecycle("backlog") → 4 steps                             │
+│     - router.GetLifecycle("backlog") → 2 steps                             │
 │                                                                            │
 │     Steps:                                                                 │
-│       1. create-story  → ready-for-dev                                     │
-│       2. dev-story     → review                                            │
-│       3. code-review   → done                                              │
-│       4. git-commit    → done                                              │
+│       1. build       → review                                              │
+│       2. git-commit  → done                                                │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -320,7 +318,9 @@ The lifecycle executor runs stories through their complete workflow sequence fro
 │       │  a. Call progressCallback(stepIndex, totalSteps, workflow)     │   │
 │       │  b. runner.RunSingle(ctx, workflow, storyKey)                  │   │
 │       │  c. If exit code != 0 → return error (fail-fast)               │   │
-│       │  d. statusWriter.UpdateStatus(storyKey, nextStatus)            │   │
+│       │  d. After a build, read the story spec and stop unless it      │   │
+│       │     recorded status "done"                                     │   │
+│       │  e. statusWriter.UpdateStatus(storyKey, nextStatus)            │   │
 │       └────────────────────────────────────────────────────────────────┘   │
 │                                                                            │
 │     Success: all steps completed                                           │
@@ -338,6 +338,24 @@ The lifecycle executor runs stories through their complete workflow sequence fro
                                            └─────────────────┘
 ```
 
+**Why a build is verified against the story spec.** The Claude CLI exits 0 even
+when `bmad-build-auto` stops on purpose. A blocked run ends through the skill's
+HALT protocol, which records the reason and returns normally, so the exit code
+cannot tell a finished story from a blocked one. After a build step the executor
+reads the terminal status out of the story spec frontmatter that
+`bmad-build-auto` wrote, and refuses to advance `sprint-status.yaml` unless that
+status is `done`. Anything else fails the lifecycle and reports the blocking
+condition along with the spec path. A missing spec is reported as a warning and
+the exit code is used instead, because no better signal is available.
+
+**Two status vocabularies.** They overlap but are not interchangeable, and each
+file is written by exactly one side:
+
+| File                   | Written by        | Values                                                                  |
+| ---------------------- | ----------------- | ----------------------------------------------------------------------- |
+| `sprint-status.yaml`   | `bmad-automate`   | `backlog`, `ready-for-dev`, `in-progress`, `review`, `done`             |
+| story spec frontmatter | `bmad-build-auto` | `draft`, `ready-for-dev`, `in-progress`, `in-review`, `blocked`, `done` |
+
 ### State Persistence
 
 The state package enables resume functionality when lifecycle execution fails.
@@ -351,8 +369,8 @@ The state package enables resume functionality when lifecycle execution fails.
 │                                                                            │
 │  {                                                                         │
 │    "story_key": "PROJ-123",                                                │
-│    "step_index": 2,           // 0-based, step that failed                 │
-│    "total_steps": 4,          // total steps in lifecycle                  │
+│    "step_index": 0,           // 0-based, step that failed                 │
+│    "total_steps": 2,          // total steps in lifecycle                  │
 │    "start_status": "backlog"  // status when execution began               │
 │  }                                                                         │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -584,6 +602,7 @@ type WorkflowRunner interface {
 // Implemented by status.Reader.
 type StatusReader interface {
     GetStoryStatus(storyKey string) (status.Status, error)
+    ReadSpec(storyKey string) (*status.Spec, error)
 }
 
 // StatusWriter is the interface for persisting story status updates.

@@ -13,7 +13,7 @@ Complete API reference for all internal packages in `bmad-automate`.
 | [workflow](#workflow)   | `internal/workflow/`  | Workflow orchestration                             |
 | [lifecycle](#lifecycle) | `internal/lifecycle/` | Story lifecycle orchestration                      |
 | [state](#state)         | `internal/state/`     | Lifecycle state persistence for resume             |
-| [status](#status)       | `internal/status/`    | Sprint status file reading                         |
+| [status](#status)       | `internal/status/`    | Sprint status and story spec reading               |
 | [router](#router)       | `internal/router/`    | Workflow routing based on status                   |
 
 ---
@@ -452,7 +452,7 @@ Configuration for full cycle execution.
 
 ```go
 type FullCycleConfig struct {
-    Steps []string  // e.g., ["create-story", "dev-story", ...]
+    Steps []string  // e.g., ["build", "git-commit"]
 }
 ```
 
@@ -539,7 +539,7 @@ func (c *Config) GetPrompt(workflowName, storyKey string) (string, error)
 
 **Parameters:**
 
-- `workflowName` - Name of workflow (e.g., "create-story")
+- `workflowName` - Name of workflow (e.g., "build")
 - `storyKey` - Story key to substitute
 
 **Returns:**
@@ -550,8 +550,8 @@ func (c *Config) GetPrompt(workflowName, storyKey string) (string, error)
 **Example:**
 
 ```go
-prompt, err := cfg.GetPrompt("create-story", "PROJ-123")
-// "Create story: PROJ-123"
+prompt, err := cfg.GetPrompt("build", "PROJ-123")
+// "/bmad-build-auto - Story: PROJ-123. ..."
 ```
 
 #### GetFullCycleSteps
@@ -786,7 +786,7 @@ func (r *Runner) RunSingle(ctx context.Context, workflowName, storyKey string) i
 **Parameters:**
 
 - `ctx` - Context for cancellation
-- `workflowName` - Workflow to run (e.g., "create-story")
+- `workflowName` - Workflow to run (e.g., "build")
 - `storyKey` - Story key for template expansion
 
 **Returns:**
@@ -850,7 +850,7 @@ func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string
 
 Story lifecycle orchestration from current status to done.
 
-The lifecycle package provides an Executor that runs stories through their complete workflow sequence (create->dev->review->commit) based on current status. Each step updates the story status automatically after successful completion.
+The lifecycle package provides an Executor that runs stories through their complete workflow sequence (build->commit) based on current status. Each step updates the story status automatically after successful completion.
 
 ### Types
 
@@ -888,10 +888,11 @@ Interface for looking up story status.
 ```go
 type StatusReader interface {
     GetStoryStatus(storyKey string) (status.Status, error)
+    ReadSpec(storyKey string) (*status.Spec, error)
 }
 ```
 
-GetStoryStatus retrieves the current status for a story key. Returns an error if the story cannot be found or the status file is invalid.
+GetStoryStatus retrieves the current status for a story key. Returns an error if the story cannot be found or the status file is invalid. ReadSpec retrieves the outcome `bmad-build-auto` recorded in the story spec, which is the only reliable signal of whether a build finished.
 
 #### StatusWriter
 
@@ -970,6 +971,7 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error
 
 - `nil` on success
 - Error if status lookup, workflow execution, or status update fails
+- Error if a build halted instead of completing
 - `router.ErrStoryComplete` for stories already done
 
 **Behavior:**
@@ -977,6 +979,7 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error
 - Looks up story's current status
 - Determines remaining workflow steps via `router.GetLifecycle`
 - Runs each workflow in sequence
+- Verifies a build against the story spec before advancing the status, because a halted build still exits 0
 - Updates status after each successful workflow
 - Stops on first error (fail-fast)
 
@@ -1194,7 +1197,7 @@ manager.Clear()
 
 **Package:** `internal/status`
 
-Sprint status file reading.
+Sprint status file and story spec reading.
 
 ### Types
 
@@ -1231,9 +1234,41 @@ type SprintStatus struct {
 }
 ```
 
+#### SpecStatus
+
+Terminal status `bmad-build-auto` records in a story spec's frontmatter.
+
+```go
+type SpecStatus string
+
+const (
+    SpecDraft       SpecStatus = "draft"
+    SpecReadyForDev SpecStatus = "ready-for-dev"
+    SpecInProgress  SpecStatus = "in-progress"
+    SpecInReview    SpecStatus = "in-review"
+    SpecBlocked     SpecStatus = "blocked"
+    SpecDone        SpecStatus = "done"
+)
+```
+
+This is a different vocabulary from `Status`, which tracks sprint-status.yaml. The two overlap on ready-for-dev, in-progress and done, and diverge on draft, blocked and in-review (sprint-status.yaml calls the latter "review"). Only `SpecDone` means the run implemented, reviewed and committed the story.
+
+#### Spec
+
+Outcome `bmad-build-auto` recorded for a story.
+
+```go
+type Spec struct {
+    Path     string      // Spec file the status was read from
+    Status   SpecStatus  // Frontmatter status value
+    Blocking string      // Blocking condition, empty unless the run halted
+    ModTime  time.Time   // When the spec was last written
+}
+```
+
 #### Reader
 
-Reader for sprint status file.
+Reader for sprint status file and story specs.
 
 ```go
 type Reader struct {
@@ -1245,6 +1280,13 @@ type Reader struct {
 
 ```go
 const DefaultStatusPath = "_bmad-output/implementation-artifacts/sprint-status.yaml"
+const DefaultSpecDir = "_bmad-output/implementation-artifacts"
+```
+
+Sentinel error for spec lookups.
+
+```go
+var ErrSpecNotFound = errors.New("no story spec found")
 ```
 
 ### Functions
@@ -1276,6 +1318,26 @@ Gets status for a specific story.
 ```go
 func (r *Reader) GetStoryStatus(storyKey string) (Status, error)
 ```
+
+#### ReadSpec
+
+Gets the outcome `bmad-build-auto` recorded for a story.
+
+```go
+func (r *Reader) ReadSpec(storyKey string) (*Spec, error)
+```
+
+**Parameters:**
+
+- `storyKey` - Story key whose spec should be read
+
+**Returns:**
+
+- `*Spec` with the frontmatter status and any blocking condition
+- `ErrSpecNotFound` if no spec file matches the story key
+- Error if the spec cannot be read or its frontmatter cannot be parsed
+
+`bmad-build-auto` derives the spec filename from the clarified intent and leads the slug with the story's tracking identifier, so the file is located by globbing on that identifier rather than by an exact name. When several specs match, the most recently modified one wins. Exit code 0 alone does not prove a build succeeded, because a deliberate HALT also exits 0, so callers check this status before advancing a story.
 
 #### GetEpicStories
 
@@ -1309,6 +1371,20 @@ stories, err := reader.GetEpicStories("05")
 
 Workflow routing based on story status.
 
+### Constants
+
+Workflow names emitted by the router. These match keys in the workflows configuration.
+
+```go
+const (
+    WorkflowBuild      = "build"
+    WorkflowCodeReview = "code-review"
+    WorkflowGitCommit  = "git-commit"
+)
+```
+
+`WorkflowBuild` dispatches `bmad-build-auto`, which plans, implements and reviews a story in one unattended pass. `WorkflowCodeReview` dispatches `bmad-code-review`, an optional extra review layer on top of the one the build already ran. `WorkflowGitCommit` commits any leftover changes and pushes, since `bmad-build-auto` commits its own reviewed diff but never pushes.
+
 ### Variables
 
 Sentinel errors for routing decisions.
@@ -1334,9 +1410,9 @@ func GetWorkflow(s status.Status) (string, error)
 
 | Status          | Workflow         | Error              |
 | --------------- | ---------------- | ------------------ |
-| `backlog`       | `"create-story"` | nil                |
-| `ready-for-dev` | `"dev-story"`    | nil                |
-| `in-progress`   | `"dev-story"`    | nil                |
+| `backlog`       | `"build"`        | nil                |
+| `ready-for-dev` | `"build"`        | nil                |
+| `in-progress`   | `"build"`        | nil                |
 | `review`        | `"code-review"`  | nil                |
 | `done`          | `""`             | `ErrStoryComplete` |
 | other           | `""`             | `ErrUnknownStatus` |
@@ -1345,7 +1421,7 @@ func GetWorkflow(s status.Status) (string, error)
 
 ```go
 workflow, err := router.GetWorkflow(status.StatusReadyForDev)
-// workflow = "dev-story", err = nil
+// workflow = "build", err = nil
 
 workflow, err := router.GetWorkflow(status.StatusDone)
 // workflow = "", err = ErrStoryComplete

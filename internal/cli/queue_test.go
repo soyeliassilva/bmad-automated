@@ -28,23 +28,19 @@ func TestQueueCommand_FullLifecycleExecution(t *testing.T) {
 			statusYAML: `development_status:
   STORY-1: backlog
   STORY-2: backlog`,
-			// Each backlog story should run 4 workflows
+			// Each backlog story should run build then commit
 			expectedWorkflows: []string{
 				// Story STORY-1
-				"create-story", "dev-story", "code-review", "git-commit",
+				"build", "git-commit",
 				// Story STORY-2
-				"create-story", "dev-story", "code-review", "git-commit",
+				"build", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				// Story STORY-1 lifecycle
-				{StoryKey: "STORY-1", NewStatus: status.StatusReadyForDev},
+				// Story STORY-1
 				{StoryKey: "STORY-1", NewStatus: status.StatusReview},
 				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
-				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
-				// Story STORY-2 lifecycle
-				{StoryKey: "STORY-2", NewStatus: status.StatusReadyForDev},
+				// Story STORY-2
 				{StoryKey: "STORY-2", NewStatus: status.StatusReview},
-				{StoryKey: "STORY-2", NewStatus: status.StatusDone},
 				{StoryKey: "STORY-2", NewStatus: status.StatusDone},
 			},
 			expectError: false,
@@ -57,24 +53,21 @@ func TestQueueCommand_FullLifecycleExecution(t *testing.T) {
   STORY-2: ready-for-dev
   STORY-3: review`,
 			expectedWorkflows: []string{
-				// Story STORY-1 (backlog): 4 workflows
-				"create-story", "dev-story", "code-review", "git-commit",
-				// Story STORY-2 (ready-for-dev): 3 workflows
-				"dev-story", "code-review", "git-commit",
-				// Story STORY-3 (review): 2 workflows
+				// Story STORY-1 (backlog): build then commit
+				"build", "git-commit",
+				// Story STORY-2 (ready-for-dev): build then commit
+				"build", "git-commit",
+				// Story STORY-3 (review): code-review then commit
 				"code-review", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				// Story STORY-1 lifecycle
-				{StoryKey: "STORY-1", NewStatus: status.StatusReadyForDev},
+				// Story STORY-1
 				{StoryKey: "STORY-1", NewStatus: status.StatusReview},
 				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
-				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
-				// Story STORY-2 lifecycle
+				// Story STORY-2
 				{StoryKey: "STORY-2", NewStatus: status.StatusReview},
 				{StoryKey: "STORY-2", NewStatus: status.StatusDone},
-				{StoryKey: "STORY-2", NewStatus: status.StatusDone},
-				// Story STORY-3 lifecycle
+				// Story STORY-3
 				{StoryKey: "STORY-3", NewStatus: status.StatusDone},
 				{StoryKey: "STORY-3", NewStatus: status.StatusDone},
 			},
@@ -87,24 +80,20 @@ func TestQueueCommand_FullLifecycleExecution(t *testing.T) {
   STORY-1: backlog
   STORY-DONE: done
   STORY-3: ready-for-dev`,
-			// Done story is skipped, others run full lifecycle
+			// Done story is skipped, others run build then commit
 			expectedWorkflows: []string{
-				// Story STORY-1 (backlog): 4 workflows
-				"create-story", "dev-story", "code-review", "git-commit",
+				// Story STORY-1 (backlog): build then commit
+				"build", "git-commit",
 				// Story STORY-DONE (done): skipped, no workflows
-				// Story STORY-3 (ready-for-dev): 3 workflows
-				"dev-story", "code-review", "git-commit",
+				// Story STORY-3 (ready-for-dev): build then commit
+				"build", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				// Story STORY-1 lifecycle
-				{StoryKey: "STORY-1", NewStatus: status.StatusReadyForDev},
+				// Story STORY-1
 				{StoryKey: "STORY-1", NewStatus: status.StatusReview},
 				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
-				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
-				// Story STORY-DONE (done): no status updates
-				// Story STORY-3 lifecycle
+				// Story STORY-3
 				{StoryKey: "STORY-3", NewStatus: status.StatusReview},
-				{StoryKey: "STORY-3", NewStatus: status.StatusDone},
 				{StoryKey: "STORY-3", NewStatus: status.StatusDone},
 			},
 			expectError: false,
@@ -115,11 +104,12 @@ func TestQueueCommand_FullLifecycleExecution(t *testing.T) {
 			statusYAML: `development_status:
   STORY-1: backlog
   STORY-2: backlog`,
-			failOnWorkflow: "dev-story",
-			// First story: create-story succeeds, dev-story fails, stops
-			expectedWorkflows: []string{"create-story", "dev-story"},
+			failOnWorkflow: "git-commit",
+			// First story: build succeeds, git-commit fails, stops
+			expectedWorkflows: []string{"build", "git-commit"},
 			expectedStatuses: []StatusUpdate{
-				{StoryKey: "STORY-1", NewStatus: status.StatusReadyForDev},
+				// Story STORY-1
+				{StoryKey: "STORY-1", NewStatus: status.StatusReview},
 			},
 			expectError: true,
 		},
@@ -139,12 +129,11 @@ func TestQueueCommand_FullLifecycleExecution(t *testing.T) {
 			statusYAML: `development_status:
   STORY-1: backlog`,
 			expectedWorkflows: []string{
-				"create-story", "dev-story", "code-review", "git-commit",
+				"build", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				{StoryKey: "STORY-1", NewStatus: status.StatusReadyForDev},
+				// Story STORY-1
 				{StoryKey: "STORY-1", NewStatus: status.StatusReview},
-				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
 				{StoryKey: "STORY-1", NewStatus: status.StatusDone},
 			},
 			expectError: false,

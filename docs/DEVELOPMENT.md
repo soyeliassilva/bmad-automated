@@ -10,6 +10,7 @@ Complete guide for developing and extending `bmad-automate`.
 - **just** - Task runner ([Install just](https://github.com/casey/just))
 - **golangci-lint** - Linter ([Install golangci-lint](https://golangci-lint.run/))
 - **Claude CLI** - For integration testing
+- **uv** - Required at runtime: bmad-build-auto renders itself through `uv run _bmad/scripts/render_skill.py` and halts when `uv` is not on PATH ([Install uv](https://docs.astral.sh/uv/))
 
 ### Clone and Build
 
@@ -50,8 +51,7 @@ bmad-automate/
 ├── internal/
 │   ├── cli/                     # CLI commands (Cobra)
 │   │   ├── root.go              # Root command, dependency injection
-│   │   ├── create_story.go      # create-story command
-│   │   ├── dev_story.go         # dev-story command
+│   │   ├── build.go             # build command
 │   │   ├── code_review.go       # code-review command
 │   │   ├── git_commit.go        # git-commit command
 │   │   ├── run.go               # run command (status-based)
@@ -94,6 +94,7 @@ bmad-automate/
 │   ├── status/                  # Sprint status
 │   │   ├── types.go             # Status types
 │   │   ├── reader.go            # YAML reader
+│   │   ├── spec.go              # Story spec frontmatter reader
 │   │   └── *_test.go            # Tests
 │   │
 │   └── router/                  # Workflow routing
@@ -245,9 +246,9 @@ func TestGetWorkflow(t *testing.T) {
         wantErr  error
     }{
         {
-            name:   "backlog routes to create-story",
+            name:   "backlog routes to build",
             status: status.StatusBacklog,
-            want:   "create-story",
+            want:   "build",
         },
         {
             name:    "done returns error",
@@ -292,7 +293,7 @@ func TestRunnerRunSingle(t *testing.T) {
 
     runner := workflow.NewRunner(mock, printer, config.DefaultConfig())
 
-    exitCode := runner.RunSingle(context.Background(), "dev-story", "TEST-123")
+    exitCode := runner.RunSingle(context.Background(), "build", "TEST-123")
 
     assert.Equal(t, 0, exitCode)
     assert.Contains(t, mock.RecordedPrompts[0], "TEST-123")

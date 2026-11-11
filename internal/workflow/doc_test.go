@@ -31,7 +31,7 @@ func Example_runner() {
 
 	// Create and run the workflow
 	runner := workflow.NewRunner(mockExecutor, printer, cfg)
-	exitCode := runner.RunSingle(context.Background(), "create-story", "EPIC-1-story")
+	exitCode := runner.RunSingle(context.Background(), "build", "EPIC-1-story")
 
 	// Check the recorded prompt was correct
 	if len(mockExecutor.RecordedPrompts) > 0 {

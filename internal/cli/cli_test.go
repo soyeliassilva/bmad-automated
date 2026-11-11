@@ -65,8 +65,7 @@ func TestNewRootCommand_HasAllSubcommands(t *testing.T) {
 	rootCmd := NewRootCommand(app)
 
 	expectedCommands := []string{
-		"create-story",
-		"dev-story",
+		"build",
 		"code-review",
 		"git-commit",
 		"run",
@@ -85,11 +84,11 @@ func TestNewRootCommand_HasAllSubcommands(t *testing.T) {
 	}
 }
 
-func TestCreateStoryCommand(t *testing.T) {
+func TestBuildCommand(t *testing.T) {
 	app := setupTestApp()
-	cmd := newCreateStoryCommand(app)
+	cmd := newBuildCommand(app)
 
-	assert.Equal(t, "create-story <story-key>", cmd.Use)
+	assert.Equal(t, "build <story-key>", cmd.Use)
 	assert.NotEmpty(t, cmd.Short)
 	assert.NotEmpty(t, cmd.Long)
 
@@ -102,21 +101,6 @@ func TestCreateStoryCommand(t *testing.T) {
 
 	err = cmd.Args(cmd, []string{"story-1", "extra"})
 	assert.Error(t, err)
-}
-
-func TestDevStoryCommand(t *testing.T) {
-	app := setupTestApp()
-	cmd := newDevStoryCommand(app)
-
-	assert.Equal(t, "dev-story <story-key>", cmd.Use)
-	assert.NotEmpty(t, cmd.Short)
-
-	// Test args validation
-	err := cmd.Args(cmd, []string{})
-	assert.Error(t, err)
-
-	err = cmd.Args(cmd, []string{"story-1"})
-	assert.NoError(t, err)
 }
 
 func TestCodeReviewCommand(t *testing.T) {
@@ -222,8 +206,7 @@ func TestSubcommand_Help(t *testing.T) {
 		name    string
 		command string
 	}{
-		{"create-story help", "create-story"},
-		{"dev-story help", "dev-story"},
+		{"build help", "build"},
 		{"code-review help", "code-review"},
 		{"git-commit help", "git-commit"},
 		{"run help", "run"},
@@ -261,8 +244,7 @@ func TestCommandsHaveRunEFunctions(t *testing.T) {
 	rootCmd := NewRootCommand(app)
 
 	commands := []string{
-		"create-story",
-		"dev-story",
+		"build",
 		"code-review",
 		"git-commit",
 		"run",
@@ -309,8 +291,7 @@ func TestCommandExecution_Success(t *testing.T) {
 		command string
 		args    []string
 	}{
-		{"create-story", []string{"TEST-123"}},
-		{"dev-story", []string{"TEST-123"}},
+		{"build", []string{"TEST-123"}},
 		{"code-review", []string{"TEST-123"}},
 		{"git-commit", []string{"TEST-123"}},
 		{"raw", []string{"hello", "world"}},
@@ -338,8 +319,7 @@ func TestCommandExecution_Failure(t *testing.T) {
 		command string
 		args    []string
 	}{
-		{"create-story", []string{"TEST-123"}},
-		{"dev-story", []string{"TEST-123"}},
+		{"build", []string{"TEST-123"}},
 		{"code-review", []string{"TEST-123"}},
 		{"git-commit", []string{"TEST-123"}},
 		{"raw", []string{"hello"}},
@@ -371,14 +351,13 @@ func TestCommandExecution_InvalidArgs(t *testing.T) {
 		command string
 		args    []string
 	}{
-		{"create-story no args", "create-story", []string{}},
-		{"dev-story no args", "dev-story", []string{}},
+		{"build no args", "build", []string{}},
 		{"code-review no args", "code-review", []string{}},
 		{"git-commit no args", "git-commit", []string{}},
 		{"run no args", "run", []string{}},
 		{"queue no args", "queue", []string{}},
 		{"raw no args", "raw", []string{}},
-		{"create-story too many args", "create-story", []string{"a", "b"}},
+		{"build too many args", "build", []string{"a", "b"}},
 	}
 
 	for _, tt := range tests {

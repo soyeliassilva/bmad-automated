@@ -18,7 +18,7 @@
 //   - epic - Run all stories in an epic
 //   - resolve-questions - Interactively resolve deferred questions from automated runs
 //   - raw - Execute a raw prompt directly
-//   - create-story, dev-story, code-review, git-commit - Individual workflow commands
+//   - build, code-review, git-commit - Individual workflow commands
 package cli
 
 import (
@@ -43,7 +43,7 @@ import (
 // [workflow.Runner], which orchestrates Claude CLI subprocess execution.
 //
 // Methods:
-//   - RunSingle executes a named workflow (e.g., "create-story", "dev-story")
+//   - RunSingle executes a named workflow (e.g., "build", "code-review")
 //     with a story key for template expansion
 //   - RunRaw executes a raw prompt directly without workflow lookup
 type WorkflowRunner interface {
@@ -56,10 +56,11 @@ type WorkflowRunner interface {
 	RunRaw(ctx context.Context, prompt string) int
 }
 
-// StatusReader is the interface for reading story status from sprint-status.yaml.
+// StatusReader is the interface for reading story status.
 //
 // The production implementation is [status.Reader], which parses the YAML
-// file at _bmad-output/implementation-artifacts/sprint-status.yaml.
+// file at _bmad-output/implementation-artifacts/sprint-status.yaml and the story
+// specs bmad-build-auto writes alongside it.
 type StatusReader interface {
 	// GetStoryStatus returns the current status of the given story key.
 	// Returns an error if the story key is not found or the file cannot be read.
@@ -68,6 +69,10 @@ type StatusReader interface {
 	// GetEpicStories returns all story keys belonging to the given epic ID.
 	// Story keys are sorted numerically by story number for predictable execution order.
 	GetEpicStories(epicID string) ([]string, error)
+
+	// ReadSpec returns the outcome bmad-build-auto recorded in the story spec.
+	// Returns [status.ErrSpecNotFound] when no spec exists for the story.
+	ReadSpec(storyKey string) (*status.Spec, error)
 }
 
 // StatusWriter is the interface for updating story status in sprint-status.yaml.
@@ -193,10 +198,9 @@ func applyReviewerOverride(app *App, reviewer string) error {
 //   - epic: Run all stories in an epic
 //   - resolve-questions: Interactively resolve deferred questions from automated runs
 //   - raw: Execute a raw prompt directly
-//   - create-story: Create a new story from backlog status
-//   - dev-story: Develop a story (ready-for-dev or in-progress status)
-//   - code-review: Review code (review status)
-//   - git-commit: Commit changes after review
+//   - build: Plan, implement and review a story in one unattended pass
+//   - code-review: Run an extra review layer (review status)
+//   - git-commit: Commit anything left over and push
 func NewRootCommand(app *App) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "bmad-automate",
@@ -204,7 +208,7 @@ func NewRootCommand(app *App) *cobra.Command {
 		Long: `BMAD Automation CLI - Automate development workflows with Claude.
 
 This tool orchestrates Claude to run development workflows including
-story creation, development, code review, and git operations.
+implementation, code review, and git operations.
 
 Flags available on epic, run, and queue commands:
   --git-local      Commit locally without pushing to remote
@@ -222,8 +226,7 @@ Examples:
 
 	// Add subcommands
 	rootCmd.AddCommand(
-		newCreateStoryCommand(app),
-		newDevStoryCommand(app),
+		newBuildCommand(app),
 		newCodeReviewCommand(app),
 		newGitCommitCommand(app),
 		newRunCommand(app),

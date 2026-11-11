@@ -10,7 +10,7 @@ bmad-automate [command] [arguments] [flags]
 
 ## Description
 
-BMAD Automation CLI orchestrates Claude AI to run development workflows including story creation, implementation, code review, and git operations.
+BMAD Automation CLI orchestrates Claude AI to run development workflows including story implementation, code review, and git operations.
 
 ## Global Behavior
 
@@ -25,14 +25,14 @@ All commands:
 
 ## Commands
 
-### create-story
+### build
 
-Create a story definition from a story key.
+Plan, implement and review a story in one unattended pass.
 
 **Usage:**
 
 ```bash
-bmad-automate create-story <story-key>
+bmad-automate build <story-key>
 ```
 
 **Arguments:**
@@ -43,50 +43,29 @@ bmad-automate create-story <story-key>
 **Example:**
 
 ```bash
-bmad-automate create-story PROJ-123
+bmad-automate build PROJ-123
 ```
 
 **Behavior:**
 
-1. Loads `create-story` workflow prompt from configuration
+1. Loads `build` workflow prompt from configuration
 2. Expands `{{.StoryKey}}` template with provided story key
-3. Executes Claude with the expanded prompt
-4. Displays streaming output
+3. Executes Claude with `/bmad-build-auto`, which plans the story spec, implements every task, runs the verification commands and runs an adversarial review with auto-fix
+4. Commits its own reviewed diff without pushing
+5. Displays streaming output
 
----
+**Requirements:**
 
-### dev-story
+- `uv` must be on `PATH`. `bmad-build-auto` renders itself through `uv run _bmad/scripts/render_skill.py` and halts when uv is missing.
+- The working tree must be clean before the build starts.
 
-Implement a story by running the development workflow.
-
-**Usage:**
-
-```bash
-bmad-automate dev-story <story-key>
-```
-
-**Arguments:**
-| Argument | Required | Description |
-|----------|----------|-------------|
-| story-key | Yes | The story identifier |
-
-**Example:**
-
-```bash
-bmad-automate dev-story PROJ-123
-```
-
-**Behavior:**
-
-1. Loads `dev-story` workflow prompt
-2. Executes Claude to implement the story
-3. Claude runs tests after each implementation step
+`bmad-build-auto` records its outcome in a story spec under `_bmad-output/implementation-artifacts/`. The `run`, `queue` and `epic` commands read that spec to tell a finished story from a halted one. See [run](#run).
 
 ---
 
 ### code-review
 
-Run code review on a story's changes.
+Run an extra review layer on a story's changes.
 
 **Usage:**
 
@@ -108,14 +87,16 @@ bmad-automate code-review PROJ-123
 **Behavior:**
 
 1. Loads `code-review` workflow prompt
-2. Executes Claude to review code changes
+2. Executes Claude with `/bmad-code-review` to review code changes
 3. Automatically applies fixes when issues are found
+
+This runs on top of the review `build` already ran, so it is only needed when a story is at status `review` or when you want a second opinion.
 
 ---
 
 ### git-commit
 
-Commit and push changes for a story.
+Commit leftover changes for a story and push.
 
 **Usage:**
 
@@ -137,8 +118,10 @@ bmad-automate git-commit PROJ-123
 **Behavior:**
 
 1. Loads `git-commit` workflow prompt
-2. Executes Claude to create a commit with conventional commit format
+2. Executes Claude to commit whatever is still uncommitted, using conventional commit format
 3. Pushes to the current branch
+
+`build` commits its own reviewed diff without pushing, so after a build this step usually only has the push left to do.
 
 ---
 
@@ -176,30 +159,41 @@ bmad-automate run --dry-run PROJ-123
 
 The `run` command executes all remaining workflows to completion:
 
-| Story Status    | Remaining Lifecycle                                            |
-| --------------- | -------------------------------------------------------------- |
-| `backlog`       | create-story -> dev-story -> code-review -> git-commit -> done |
-| `ready-for-dev` | dev-story -> code-review -> git-commit -> done                 |
-| `in-progress`   | dev-story -> code-review -> git-commit -> done                 |
-| `review`        | code-review -> git-commit -> done                              |
-| `done`          | No action (story already complete)                             |
+| Story Status    | Remaining Lifecycle                |
+| --------------- | ---------------------------------- |
+| `backlog`       | build -> git-commit -> done        |
+| `ready-for-dev` | build -> git-commit -> done        |
+| `in-progress`   | build -> git-commit -> done        |
+| `review`        | code-review -> git-commit -> done  |
+| `done`          | No action (story already complete) |
 
 **Behavior:**
 
 1. Reads story status from `_bmad-output/implementation-artifacts/sprint-status.yaml`
 2. Determines remaining lifecycle steps based on status
 3. Executes each workflow in sequence
-4. Auto-updates status in `sprint-status.yaml` after each successful step
-5. Stops at `done` or on first failure
+4. After a `build` step, reads the story spec to confirm the build finished
+5. Auto-updates status in `sprint-status.yaml` after each successful step
+6. Stops at `done` or on first failure
+
+**Build Verification:**
+
+The Claude CLI exits 0 even when `bmad-build-auto` deliberately halts, so the exit code alone cannot tell a finished story from a blocked one. After the `build` step the executor globs `_bmad-output/implementation-artifacts/spec-<story-id>-*.md`, takes the most recently modified match, and reads the `status` field from its frontmatter. `<story-id>` is the story key up to and including its story number, so `7-1-define-schema` is looked up as `spec-7-1-*.md`.
+
+If that status is anything other than `done`, the run stops with an error naming the status and the blocking condition, and `sprint-status.yaml` is left untouched:
+
+```
+Error: build halted for PROJ-123 with status "blocked": intent gap in acceptance criteria (see _bmad-output/implementation-artifacts/spec-PROJ-123-add-auth.md)
+```
+
+If no spec file matches, a warning is printed and the exit code is used instead. The same applies when the spec is older than the build that just ran, since a leftover spec from an earlier run says nothing about this one.
 
 **Dry Run Output:**
 
 ```
 Dry run for story PROJ-123:
-  1. create-story -> ready-for-dev
-  2. dev-story -> review
-  3. code-review -> done
-  4. git-commit -> done
+  1. build -> review
+  2. git-commit -> done
 ```
 
 ---
@@ -265,20 +259,17 @@ Summary:
 Dry run for 3 stories:
 
 Story PROJ-123:
-  1. dev-story -> review
-  2. code-review -> done
-  3. git-commit -> done
+  1. build -> review
+  2. git-commit -> done
 
 Story PROJ-124:
   (already complete)
 
 Story PROJ-125:
-  1. create-story -> ready-for-dev
-  2. dev-story -> review
-  3. code-review -> done
-  4. git-commit -> done
+  1. code-review -> done
+  2. git-commit -> done
 
-Total: 7 workflows across 2 stories (1 already complete)
+Total: 4 workflows across 2 stories (1 already complete)
 ```
 
 ---
@@ -394,23 +385,18 @@ The default configuration file is `config/workflows.yaml`:
 
 ```yaml
 workflows:
-  create-story:
-    prompt_template: "Create story: {{.StoryKey}}"
-
-  dev-story:
-    prompt_template: "Work on story: {{.StoryKey}}"
+  build:
+    prompt_template: "/bmad-build-auto - Story: {{.StoryKey}}"
 
   code-review:
-    prompt_template: "Review story: {{.StoryKey}}"
+    prompt_template: "/bmad-code-review - Review story: {{.StoryKey}}"
 
   git-commit:
     prompt_template: "Commit changes for {{.StoryKey}}"
 
 full_cycle:
   steps:
-    - create-story
-    - dev-story
-    - code-review
+    - build
     - git-commit
 
 claude:
@@ -455,6 +441,8 @@ development_status:
 - `review` - Story in code review
 - `done` - Story complete
 
+These are the only values written to `sprint-status.yaml`. The story spec that `bmad-build-auto` writes uses its own separate vocabulary (`draft`, `ready-for-dev`, `in-progress`, `in-review`, `blocked`, `done`) and is only read to verify a build.
+
 ---
 
 ## State File
@@ -472,8 +460,8 @@ The lifecycle executor persists execution state for error recovery.
 ```json
 {
 	"story_key": "PROJ-123",
-	"step_index": 2,
-	"total_steps": 4,
+	"step_index": 1,
+	"total_steps": 2,
 	"start_status": "backlog"
 }
 ```
@@ -506,10 +494,11 @@ The lifecycle executor persists execution state for error recovery.
 
 ```bash
 # Step-by-step workflow
-bmad-automate create-story PROJ-123
-bmad-automate dev-story PROJ-123
-bmad-automate code-review PROJ-123
+bmad-automate build PROJ-123
 bmad-automate git-commit PROJ-123
+
+# Optional extra review layer before committing
+bmad-automate code-review PROJ-123
 ```
 
 ### Status-Based Automation
@@ -540,5 +529,5 @@ bmad-automate raw "Find all TODO comments"
 BMAD_CONFIG_PATH=/path/to/config.yaml bmad-automate run PROJ-123
 
 # Use custom Claude binary
-BMAD_CLAUDE_PATH=/usr/local/bin/claude bmad-automate dev-story PROJ-123
+BMAD_CLAUDE_PATH=/usr/local/bin/claude bmad-automate build PROJ-123
 ```

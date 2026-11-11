@@ -28,23 +28,19 @@ func TestEpicCommand_FullLifecycleExecution(t *testing.T) {
 			statusYAML: `development_status:
   6-1-first: backlog
   6-2-second: backlog`,
-			// Each backlog story should run 4 workflows
+			// Each backlog story should run build then commit
 			expectedWorkflows: []string{
 				// Story 6-1
-				"create-story", "dev-story", "code-review", "git-commit",
+				"build", "git-commit",
 				// Story 6-2
-				"create-story", "dev-story", "code-review", "git-commit",
+				"build", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				// Story 6-1 lifecycle
-				{StoryKey: "6-1-first", NewStatus: status.StatusReadyForDev},
+				// Story 6-1-first
 				{StoryKey: "6-1-first", NewStatus: status.StatusReview},
 				{StoryKey: "6-1-first", NewStatus: status.StatusDone},
-				{StoryKey: "6-1-first", NewStatus: status.StatusDone},
-				// Story 6-2 lifecycle
-				{StoryKey: "6-2-second", NewStatus: status.StatusReadyForDev},
+				// Story 6-2-second
 				{StoryKey: "6-2-second", NewStatus: status.StatusReview},
-				{StoryKey: "6-2-second", NewStatus: status.StatusDone},
 				{StoryKey: "6-2-second", NewStatus: status.StatusDone},
 			},
 			expectError: false,
@@ -57,24 +53,21 @@ func TestEpicCommand_FullLifecycleExecution(t *testing.T) {
   6-2-second: ready-for-dev
   6-3-third: review`,
 			expectedWorkflows: []string{
-				// Story 6-1 (backlog): 4 workflows
-				"create-story", "dev-story", "code-review", "git-commit",
-				// Story 6-2 (ready-for-dev): 3 workflows
-				"dev-story", "code-review", "git-commit",
-				// Story 6-3 (review): 2 workflows
+				// Story 6-1 (backlog): build then commit
+				"build", "git-commit",
+				// Story 6-2 (ready-for-dev): build then commit
+				"build", "git-commit",
+				// Story 6-3 (review): code-review then commit
 				"code-review", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				// Story 6-1 lifecycle
-				{StoryKey: "6-1-first", NewStatus: status.StatusReadyForDev},
+				// Story 6-1-first
 				{StoryKey: "6-1-first", NewStatus: status.StatusReview},
 				{StoryKey: "6-1-first", NewStatus: status.StatusDone},
-				{StoryKey: "6-1-first", NewStatus: status.StatusDone},
-				// Story 6-2 lifecycle
+				// Story 6-2-second
 				{StoryKey: "6-2-second", NewStatus: status.StatusReview},
 				{StoryKey: "6-2-second", NewStatus: status.StatusDone},
-				{StoryKey: "6-2-second", NewStatus: status.StatusDone},
-				// Story 6-3 lifecycle
+				// Story 6-3-third
 				{StoryKey: "6-3-third", NewStatus: status.StatusDone},
 				{StoryKey: "6-3-third", NewStatus: status.StatusDone},
 			},
@@ -87,24 +80,20 @@ func TestEpicCommand_FullLifecycleExecution(t *testing.T) {
   6-1-first: backlog
   6-2-done: done
   6-3-third: ready-for-dev`,
-			// Done story is skipped, others run full lifecycle
+			// Done story is skipped, others run build then commit
 			expectedWorkflows: []string{
-				// Story 6-1 (backlog): 4 workflows
-				"create-story", "dev-story", "code-review", "git-commit",
+				// Story 6-1 (backlog): build then commit
+				"build", "git-commit",
 				// Story 6-2 (done): skipped, no workflows
-				// Story 6-3 (ready-for-dev): 3 workflows
-				"dev-story", "code-review", "git-commit",
+				// Story 6-3 (ready-for-dev): build then commit
+				"build", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				// Story 6-1 lifecycle
-				{StoryKey: "6-1-first", NewStatus: status.StatusReadyForDev},
+				// Story 6-1-first
 				{StoryKey: "6-1-first", NewStatus: status.StatusReview},
 				{StoryKey: "6-1-first", NewStatus: status.StatusDone},
-				{StoryKey: "6-1-first", NewStatus: status.StatusDone},
-				// Story 6-2 (done): no status updates
-				// Story 6-3 lifecycle
+				// Story 6-3-third
 				{StoryKey: "6-3-third", NewStatus: status.StatusReview},
-				{StoryKey: "6-3-third", NewStatus: status.StatusDone},
 				{StoryKey: "6-3-third", NewStatus: status.StatusDone},
 			},
 			expectError: false,
@@ -115,11 +104,12 @@ func TestEpicCommand_FullLifecycleExecution(t *testing.T) {
 			statusYAML: `development_status:
   6-1-first: backlog
   6-2-second: backlog`,
-			failOnWorkflow: "dev-story",
-			// First story: create-story succeeds, dev-story fails, stops
-			expectedWorkflows: []string{"create-story", "dev-story"},
+			failOnWorkflow: "git-commit",
+			// First story: build succeeds, git-commit fails, stops
+			expectedWorkflows: []string{"build", "git-commit"},
 			expectedStatuses: []StatusUpdate{
-				{StoryKey: "6-1-first", NewStatus: status.StatusReadyForDev},
+				// Story 6-1-first
+				{StoryKey: "6-1-first", NewStatus: status.StatusReview},
 			},
 			expectError: true,
 		},
@@ -243,23 +233,20 @@ func TestEpicCommand_MultipleEpics(t *testing.T) {
   3-1-dashboard: backlog`,
 			expectedWorkflows: []string{
 				// Epic 2 stories first
-				"create-story", "dev-story", "code-review", "git-commit",
-				"create-story", "dev-story", "code-review", "git-commit",
+				"build", "git-commit",
+				"build", "git-commit",
 				// Then epic 3
-				"create-story", "dev-story", "code-review", "git-commit",
+				"build", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
-				{StoryKey: "2-1-auth", NewStatus: status.StatusReadyForDev},
+				// Story 2-1-auth
 				{StoryKey: "2-1-auth", NewStatus: status.StatusReview},
 				{StoryKey: "2-1-auth", NewStatus: status.StatusDone},
-				{StoryKey: "2-1-auth", NewStatus: status.StatusDone},
-				{StoryKey: "2-2-login", NewStatus: status.StatusReadyForDev},
+				// Story 2-2-login
 				{StoryKey: "2-2-login", NewStatus: status.StatusReview},
 				{StoryKey: "2-2-login", NewStatus: status.StatusDone},
-				{StoryKey: "2-2-login", NewStatus: status.StatusDone},
-				{StoryKey: "3-1-dashboard", NewStatus: status.StatusReadyForDev},
+				// Story 3-1-dashboard
 				{StoryKey: "3-1-dashboard", NewStatus: status.StatusReview},
-				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
 				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
 			},
 		},
@@ -273,14 +260,15 @@ func TestEpicCommand_MultipleEpics(t *testing.T) {
 			expectedWorkflows: []string{
 				// Epic 2: done, skipped
 				// Epic 3: ready-for-dev
-				"dev-story", "code-review", "git-commit",
+				"build", "git-commit",
 				// Epic 4: review
 				"code-review", "git-commit",
 			},
 			expectedStatuses: []StatusUpdate{
+				// Story 3-1-dashboard
 				{StoryKey: "3-1-dashboard", NewStatus: status.StatusReview},
 				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
-				{StoryKey: "3-1-dashboard", NewStatus: status.StatusDone},
+				// Story 4-1-deploy
 				{StoryKey: "4-1-deploy", NewStatus: status.StatusDone},
 				{StoryKey: "4-1-deploy", NewStatus: status.StatusDone},
 			},
@@ -291,11 +279,12 @@ func TestEpicCommand_MultipleEpics(t *testing.T) {
 			statusYAML: `development_status:
   2-1-auth: backlog
   3-1-dashboard: backlog`,
-			failOnWorkflow: "dev-story",
-			// Epic 2 story: create-story OK, dev-story fails
-			expectedWorkflows: []string{"create-story", "dev-story"},
+			failOnWorkflow: "git-commit",
+			// Epic 2 story: build OK, git-commit fails
+			expectedWorkflows: []string{"build", "git-commit"},
 			expectedStatuses: []StatusUpdate{
-				{StoryKey: "2-1-auth", NewStatus: status.StatusReadyForDev},
+				// Story 2-1-auth
+				{StoryKey: "2-1-auth", NewStatus: status.StatusReview},
 			},
 			expectError: true,
 		},

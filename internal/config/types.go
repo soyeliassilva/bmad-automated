@@ -36,7 +36,7 @@ const deferredQuestionsInstruction = ` DEFERRED QUESTIONS: When you encounter un
 // the application. Use [DefaultConfig] to get sensible defaults.
 type Config struct {
 	// Workflows maps workflow names to their configurations.
-	// Keys are workflow names (e.g., "create-story", "dev-story").
+	// Keys are workflow names (e.g., "build", "code-review").
 	Workflows map[string]WorkflowConfig `mapstructure:"workflows"`
 
 	// FullCycle defines the steps for full lifecycle execution.
@@ -74,7 +74,7 @@ type WorkflowConfig struct {
 // to determine the sequence of workflows to execute.
 type FullCycleConfig struct {
 	// Steps is the ordered list of workflow names to execute.
-	// Default: ["create-story", "dev-story", "code-review", "git-commit"]
+	// Default: ["build", "git-commit"]
 	Steps []string `mapstructure:"steps"`
 }
 
@@ -119,28 +119,24 @@ type OutputConfig struct {
 
 // DefaultConfig returns a new [Config] with sensible defaults.
 //
-// The defaults include standard workflow prompts for create-story, dev-story,
-// code-review, and git-commit workflows, as well as Claude CLI and output
-// formatting settings. These defaults work out of the box without any
-// configuration file.
+// The defaults include standard workflow prompts for the build, code-review and
+// git-commit workflows, as well as Claude CLI and output formatting settings.
+// These defaults work out of the box without any configuration file.
 func DefaultConfig() *Config {
 	return &Config{
 		Workflows: map[string]WorkflowConfig{
-			"create-story": {
-				PromptTemplate: "/bmad-create-story - Create story: {{.StoryKey}}. Do not ask questions." + deferredQuestionsInstruction,
-			},
-			"dev-story": {
-				PromptTemplate: "/bmad-dev-story - Work on story: {{.StoryKey}}. Complete all tasks. Run tests after each implementation. Do not ask clarifying questions - use best judgment based on existing patterns." + deferredQuestionsInstruction,
+			"build": {
+				PromptTemplate: "/bmad-build-auto - Story: {{.StoryKey}}. Plan the spec, implement every task, run the verification commands, and run the review with auto-fix, all in one unattended pass. Do not ask clarifying questions - use best judgment based on existing patterns." + deferredQuestionsInstruction,
 			},
 			"code-review": {
-				PromptTemplate: "/bmad-code-review - Review story: {{.StoryKey}}. When presenting fix options, always choose to auto-fix all issues immediately. Do not wait for user input." + deferredQuestionsInstruction,
+				PromptTemplate: "/bmad-code-review - Review story: {{.StoryKey}}. This is an extra layer on top of the review the build already ran. Whenever you are asked how to handle patch findings, always choose option 1, \"Apply every patch\", and never wait for user input. Resolve decision-needed findings with best judgment and record the reasoning instead of halting." + deferredQuestionsInstruction,
 			},
 			"git-commit": {
-				PromptTemplate: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format.{{if .GitLocal}} Do NOT push to remote. Only commit locally.{{else}} Then push to the current branch.{{end}} Do not ask questions.",
+				PromptTemplate: "Commit any uncommitted changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Part of the work may already be committed by an earlier workflow, in which case commit only what remains.{{if .GitLocal}} Do NOT push to remote. Only commit locally.{{else}} Then push to the current branch.{{end}} Do not ask questions.",
 			},
 		},
 		FullCycle: FullCycleConfig{
-			Steps: []string{"create-story", "dev-story", "code-review", "git-commit"},
+			Steps: []string{"build", "git-commit"},
 		},
 		Claude: ClaudeConfig{
 			OutputFormat: "stream-json",

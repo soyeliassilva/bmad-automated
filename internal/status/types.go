@@ -19,6 +19,9 @@ package status
 // A story progresses through statuses as it moves through development:
 // backlog -> ready-for-dev -> in-progress -> review -> done.
 //
+// This is the sprint-status.yaml vocabulary. Story specs written by
+// bmad-build-auto use a different one, see [SpecStatus].
+//
 // The status determines which workflow command is executed when running a story.
 // See the internal/router package for status-to-workflow mapping.
 type Status string
@@ -26,15 +29,15 @@ type Status string
 // Status constants define the valid development statuses in the story lifecycle.
 const (
 	// StatusBacklog indicates a story that has not been started.
-	// Stories in backlog trigger the create-story workflow.
+	// Stories in backlog trigger the build workflow.
 	StatusBacklog Status = "backlog"
 
 	// StatusReadyForDev indicates a story is ready for development.
-	// Stories in ready-for-dev trigger the dev-story workflow.
+	// Stories in ready-for-dev trigger the build workflow.
 	StatusReadyForDev Status = "ready-for-dev"
 
 	// StatusInProgress indicates a story is actively being developed.
-	// Stories in progress trigger the dev-story workflow to continue work.
+	// Stories in progress trigger the build workflow to continue work.
 	StatusInProgress Status = "in-progress"
 
 	// StatusReview indicates a story is ready for code review.

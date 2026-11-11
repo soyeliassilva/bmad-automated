@@ -6,9 +6,8 @@ A practical guide to using `bmad-automate` for automating development workflows.
 
 `bmad-automate` is a CLI tool that orchestrates Claude AI to automate repetitive development tasks. It handles:
 
-- Creating story definitions from story keys
-- Implementing features based on story requirements
-- Running code reviews
+- Planning, implementing and reviewing a story in one unattended pass
+- Running an extra review layer when you want one
 - Committing and pushing changes
 - Processing multiple stories in batch
 - Managing entire epics
@@ -19,7 +18,8 @@ A practical guide to using `bmad-automate` for automating development workflows.
 
 1. **Go 1.21+** installed
 2. **Claude CLI** installed and configured ([installation guide](https://github.com/anthropics/claude-code))
-3. **just** command runner (optional but recommended)
+3. **uv** on `PATH`. The `bmad-build-auto` skill renders itself through `uv run _bmad/scripts/render_skill.py` and halts when uv is missing.
+4. **just** command runner (optional but recommended)
 
 ### Installation
 
@@ -47,33 +47,27 @@ bmad-automate --help
 
 ### Working with Individual Stories
 
-#### 1. Create a Story
+#### 1. Build the Story
 
-Generate a story definition from a story key:
-
-```bash
-bmad-automate create-story PROJ-123
-```
-
-This runs Claude with a prompt to create the story definition based on your configured template.
-
-#### 2. Implement the Story
-
-Run the development workflow:
+Plan, implement and review the story in one pass:
 
 ```bash
-bmad-automate dev-story PROJ-123
+bmad-automate build PROJ-123
 ```
 
-Claude will:
+This runs Claude with `/bmad-build-auto`, which will:
 
-- Read the story requirements
-- Implement the feature
-- Run tests after each change
+- Plan the story spec
+- Implement every task
+- Run the verification commands
+- Run an adversarial review with auto-fix
+- Commit its own reviewed diff, without pushing
 
-#### 3. Review the Code
+The build needs a clean working tree to start, and it needs `uv` on `PATH`.
 
-Run code review on your changes:
+#### 2. Review the Code Again (optional)
+
+The build already reviewed its own work. Run this when you want a second pass, or when a story is sitting at status `review`:
 
 ```bash
 bmad-automate code-review PROJ-123
@@ -81,13 +75,15 @@ bmad-automate code-review PROJ-123
 
 Claude reviews the code and automatically fixes issues.
 
-#### 4. Commit and Push
+#### 3. Push
 
-Create a commit and push to remote:
+Commit whatever is still uncommitted and push to remote:
 
 ```bash
 bmad-automate git-commit PROJ-123
 ```
+
+After a build there is usually only the push left to do.
 
 ### Status-Based Automation
 
@@ -99,13 +95,15 @@ bmad-automate run PROJ-123
 
 The `run` command now executes the **complete lifecycle** from the story's current status all the way to `done`. It auto-updates the status after each successful step and stops at completion or on the first failure.
 
-| Story Status    | Remaining Lifecycle                                            |
-| --------------- | -------------------------------------------------------------- |
-| `backlog`       | create-story -> dev-story -> code-review -> git-commit -> done |
-| `ready-for-dev` | dev-story -> code-review -> git-commit -> done                 |
-| `in-progress`   | dev-story -> code-review -> git-commit -> done                 |
-| `review`        | code-review -> git-commit -> done                              |
-| `done`          | No action (story already complete)                             |
+| Story Status    | Remaining Lifecycle                |
+| --------------- | ---------------------------------- |
+| `backlog`       | build -> git-commit -> done        |
+| `ready-for-dev` | build -> git-commit -> done        |
+| `in-progress`   | build -> git-commit -> done        |
+| `review`        | code-review -> git-commit -> done  |
+| `done`          | No action (story already complete) |
+
+`build` sets the story to `review`, and `git-commit` sets it to `done`. On the review route, both `code-review` and `git-commit` set `done`.
 
 ### Full Lifecycle Execution
 
@@ -118,16 +116,10 @@ bmad-automate run PROJ-123
 **Example output:**
 
 ```
-[1/4] create-story
+[1/2] build
   ... workflow output ...
 
-[2/4] dev-story
-  ... workflow output ...
-
-[3/4] code-review
-  ... workflow output ...
-
-[4/4] git-commit
+[2/2] git-commit
   ... workflow output ...
 
 Story PROJ-123 completed successfully
@@ -138,8 +130,21 @@ Story PROJ-123 completed successfully
 1. Reads the story's current status from `sprint-status.yaml`
 2. Determines remaining lifecycle steps based on status
 3. Executes each workflow in sequence
-4. Updates status in `sprint-status.yaml` after each successful step
-5. Stops at `done` or on first failure
+4. After a `build` step, checks the story spec to confirm the build really finished
+5. Updates status in `sprint-status.yaml` after each successful step
+6. Stops at `done` or on first failure
+
+**Halted builds:**
+
+The Claude CLI exits 0 even when `bmad-build-auto` deliberately halts, so the exit code on its own cannot tell a finished story from a blocked one. After every `build` step the tool reads the story spec that `bmad-build-auto` wrote under `_bmad-output/implementation-artifacts/` and checks the `status` in its frontmatter.
+
+If that status is not `done`, the run stops and the story is left where it was in `sprint-status.yaml`:
+
+```
+Error: build halted for PROJ-123 with status "blocked": intent gap in acceptance criteria (see _bmad-output/implementation-artifacts/spec-PROJ-123-add-auth.md)
+```
+
+Read the spec, resolve the blocking condition, then run the story again. If no spec is found, or the only spec predates the build that just ran, the tool prints a warning and falls back to the exit code.
 
 ### Dry Run Mode
 
@@ -153,10 +158,8 @@ bmad-automate run --dry-run PROJ-123
 
 ```
 Dry run for story PROJ-123:
-  1. create-story -> ready-for-dev
-  2. dev-story -> review
-  3. code-review -> done
-  4. git-commit -> done
+  1. build -> review
+  2. git-commit -> done
 ```
 
 Dry run is available for all lifecycle commands:
@@ -176,8 +179,8 @@ When a workflow fails, the tool saves execution state so you can resume from the
 ```json
 {
 	"story_key": "PROJ-123",
-	"step_index": 2,
-	"total_steps": 4,
+	"step_index": 1,
+	"total_steps": 2,
 	"start_status": "backlog"
 }
 ```
@@ -185,9 +188,9 @@ When a workflow fails, the tool saves execution state so you can resume from the
 **Resuming after failure:**
 
 ```bash
-# Workflow fails at step 2 (dev-story)
+# Workflow fails at step 1 (build)
 bmad-automate run PROJ-123
-# Error: workflow failed: dev-story returned exit code 1
+# Error: workflow failed: build returned exit code 1
 
 # Fix the issue, then re-run
 bmad-automate run PROJ-123
@@ -262,31 +265,22 @@ Edit `config/workflows.yaml` to customize workflow prompts:
 
 ```yaml
 workflows:
-  create-story:
+  build:
     prompt_template: |
-      Create a detailed story definition for {{.StoryKey}}.
-      Include acceptance criteria and technical requirements.
-      Do not ask clarifying questions.
-
-  dev-story:
-    prompt_template: |
-      Implement story {{.StoryKey}}.
-      Follow existing code patterns.
-      Run tests after each change.
-      Do not ask questions - use best judgment.
+      /bmad-build-auto - Story: {{.StoryKey}}.
+      Plan the spec, implement every task, run the verification commands,
+      and run the review with auto-fix, all in one unattended pass.
+      Do not ask clarifying questions - use best judgment.
 
   code-review:
     prompt_template: |
-      Review changes for story {{.StoryKey}}.
-      Check for:
-      - Code quality issues
-      - Missing tests
-      - Security vulnerabilities
+      /bmad-code-review - Review story {{.StoryKey}}.
+      This is an extra layer on top of the review the build already ran.
       Auto-fix all issues immediately.
 
   git-commit:
     prompt_template: |
-      Commit changes for {{.StoryKey}}.
+      Commit any uncommitted changes for {{.StoryKey}}.
       Use conventional commit format.
       Push to current branch.
 ```
@@ -349,11 +343,13 @@ development_status:
 
 | Status          | Meaning                                 |
 | --------------- | --------------------------------------- |
-| `backlog`       | Not started, needs story creation       |
-| `ready-for-dev` | Story created, ready for implementation |
+| `backlog`       | Not started                             |
+| `ready-for-dev` | Ready to be built                       |
 | `in-progress`   | Currently being implemented             |
-| `review`        | Implementation done, needs review       |
+| `review`        | Built, waiting on extra review and push |
 | `done`          | Complete                                |
+
+Do not confuse these with the story spec. `sprint-status.yaml` uses `backlog`, `ready-for-dev`, `in-progress`, `review` and `done`. The spec that `bmad-build-auto` writes into `_bmad-output/implementation-artifacts/` carries its own frontmatter status: `draft`, `ready-for-dev`, `in-progress`, `in-review`, `blocked` or `done`. The tool only reads the spec status to check whether a build finished, and it never writes it.
 
 ## Workflow Patterns
 
@@ -362,10 +358,8 @@ development_status:
 Run each step manually for full control:
 
 ```bash
-bmad-automate create-story PROJ-123
-# Review the story definition
-bmad-automate dev-story PROJ-123
-# Test the implementation manually
+bmad-automate build PROJ-123
+# Read the story spec and test the implementation manually
 bmad-automate code-review PROJ-123
 # Verify fixes
 bmad-automate git-commit PROJ-123
@@ -450,7 +444,7 @@ Summary:
   PROJ-123  ✓  1m 23s
   PROJ-124  ✓  2m 45s
   PROJ-125  ○  skipped (done)
-  PROJ-126  ✗  failed at dev-story (45s)
+  PROJ-126  ✗  failed at build (45s)
 ```
 
 ## Error Handling
@@ -515,6 +509,12 @@ Error: unknown status value: invalid-status
 
 Solution: Use a valid status: `backlog`, `ready-for-dev`, `in-progress`, `review`, or `done`.
 
+**Build halts right away:**
+
+`bmad-build-auto` renders itself with `uv run _bmad/scripts/render_skill.py` and halts when `uv` is not on `PATH`. It also halts when the working tree is not clean.
+
+Solution: install `uv`, commit or stash anything outstanding, then run the story again.
+
 ## Tips and Best Practices
 
 ### 1. Start Small
@@ -522,7 +522,7 @@ Solution: Use a valid status: `backlog`, `ready-for-dev`, `in-progress`, `review
 Begin with single story commands to understand the workflow:
 
 ```bash
-bmad-automate create-story TEST-001
+bmad-automate build TEST-001
 ```
 
 ### 2. Review Output

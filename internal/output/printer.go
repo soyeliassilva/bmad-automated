@@ -13,7 +13,7 @@ import (
 // It captures the step name, execution duration, and success/failure status
 // for display in cycle summaries.
 type StepResult struct {
-	// Name is the step identifier (e.g., "create-story", "dev-story").
+	// Name is the step identifier (e.g., "build", "git-commit").
 	Name string
 	// Duration is how long the step took to execute.
 	Duration time.Duration
@@ -51,7 +51,7 @@ type Printer interface {
 	// SessionEnd prints completion status for the session with total duration.
 	SessionEnd(duration time.Duration, success bool)
 
-	// StepStart prints a numbered step header (e.g., "[1/4] create-story").
+	// StepStart prints a numbered step header (e.g., "[1/2] build").
 	StepStart(step, total int, name string)
 	// StepEnd prints step completion status with duration.
 	StepEnd(duration time.Duration, success bool)
@@ -184,7 +184,7 @@ func (p *DefaultPrinter) Divider() {
 // CycleHeader prints the header for a full cycle run.
 func (p *DefaultPrinter) CycleHeader(storyKey string) {
 	p.writeln("")
-	content := fmt.Sprintf("BMAD Full Cycle: %s\nSteps: create-story → dev-story → code-review → git-commit", storyKey)
+	content := fmt.Sprintf("BMAD Full Cycle: %s\nSteps: build → git-commit", storyKey)
 	p.writeln(headerStyle.Render(content))
 	p.writeln("")
 }

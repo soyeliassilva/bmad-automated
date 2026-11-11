@@ -47,20 +47,17 @@ bmad-automate queue --dry-run AUTH-042 AUTH-043 AUTH-044
 Dry run for 3 stories:
 
 Story AUTH-042:
-  1. dev-story -> review
-  2. code-review -> done
-  3. git-commit -> done
+  1. build -> review
+  2. git-commit -> done
 
 Story AUTH-043:
   (already complete)
 
 Story AUTH-044:
-  1. create-story -> ready-for-dev
-  2. dev-story -> review
-  3. code-review -> done
-  4. git-commit -> done
+  1. build -> review
+  2. git-commit -> done
 
-Total: 7 workflows across 2 stories (1 already complete)
+Total: 4 workflows across 2 stories (1 already complete)
 ```
 
 ---
@@ -104,7 +101,7 @@ bmad-automate queue AUTH-042 AUTH-043 AUTH-044
 
 **Result:**
 
-- AUTH-042: Runs dev-story -> code-review -> git-commit
+- AUTH-042: Runs build -> git-commit
 - AUTH-043: Runs code-review -> git-commit
 - AUTH-044: Skipped (already done)
 

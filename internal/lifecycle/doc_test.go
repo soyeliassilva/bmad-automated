@@ -3,6 +3,7 @@ package lifecycle_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"bmad-automate/internal/lifecycle"
 	"bmad-automate/internal/status"
@@ -25,6 +26,10 @@ type mockStatusReader struct {
 
 func (m *mockStatusReader) GetStoryStatus(storyKey string) (status.Status, error) {
 	return m.status, nil
+}
+
+func (m *mockStatusReader) ReadSpec(storyKey string) (*status.Spec, error) {
+	return &status.Spec{Path: "spec-" + storyKey + ".md", Status: status.SpecDone, ModTime: time.Now()}, nil
 }
 
 // mockStatusWriter implements lifecycle.StatusWriter for examples.
@@ -112,7 +117,6 @@ func Example_getSteps() {
 	}
 	// Output:
 	// Remaining steps:
-	//   1. dev-story -> review
-	//   2. code-review -> done
-	//   3. git-commit -> done
+	//   1. build -> review
+	//   2. git-commit -> done
 }

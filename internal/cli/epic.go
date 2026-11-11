@@ -27,9 +27,9 @@ sorts them by story number, and runs each to completion before moving to the nex
 When multiple epic IDs are provided, epics are processed in the order given.
 
 For each story, executes all remaining workflows based on its current status:
-  - backlog       → create-story → dev-story → code-review → git-commit → done
-  - ready-for-dev → dev-story → code-review → git-commit → done
-  - in-progress   → dev-story → code-review → git-commit → done
+  - backlog       → build → git-commit → done
+  - ready-for-dev → build → git-commit → done
+  - in-progress   → build → git-commit → done
   - review        → code-review → git-commit → done
   - done          → skipped (story already complete)
 

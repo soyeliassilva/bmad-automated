@@ -40,7 +40,7 @@ func Example_getPrompt() {
 
 	// GetPrompt expands the template for a workflow with the given story key.
 	// The template uses {{.StoryKey}} to reference the story identifier.
-	prompt, err := cfg.GetPrompt("create-story", "7-1-define-schema")
+	prompt, err := cfg.GetPrompt("build", "7-1-define-schema")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
